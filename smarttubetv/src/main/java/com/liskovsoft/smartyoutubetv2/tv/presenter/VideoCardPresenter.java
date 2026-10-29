@@ -3,11 +3,15 @@ package com.liskovsoft.smartyoutubetv2.tv.presenter;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.Outline;
 import android.graphics.drawable.Drawable;
 import android.os.Build.VERSION;
+import android.text.TextUtils;
 import android.util.Pair;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -48,14 +52,11 @@ public class VideoCardPresenter extends LongClickPresenter {
     public ViewHolder onCreateViewHolder(ViewGroup parent) {
         Context context = parent.getContext();
 
-        mDefaultBackgroundColor =
-            ContextCompat.getColor(context, Helpers.getThemeAttr(context, R.attr.cardDefaultBackground));
-        mDefaultTextColor =
-                ContextCompat.getColor(context, R.color.card_default_text);
-        mSelectedBackgroundColor =
-                ContextCompat.getColor(context, Helpers.getThemeAttr(context, R.attr.cardSelectedBackground));
-        mSelectedTextColor =
-                ContextCompat.getColor(context, R.color.card_selected_text_grey);
+        // Clean YouTube TV style transparent unfocused background & white focused card state
+        mDefaultBackgroundColor = Color.TRANSPARENT;
+        mDefaultTextColor = Color.parseColor("#F1F1F1");
+        mSelectedBackgroundColor = Color.parseColor("#FFFFFF");
+        mSelectedTextColor = Color.parseColor("#0F0F0F");
 
         mCardPreviewType = getCardPreviewType(context);
         mThumbQuality = getThumbQuality(context);
@@ -76,7 +77,7 @@ public class VideoCardPresenter extends LongClickPresenter {
         };
 
         cardView.setTitleLinesNum(isCardMultilineTitleEnabled ? 2 : 1);
-        cardView.setContentLinesNum(isCardMultilineSubtitleEnabled ? 2 : 1);
+        cardView.setContentLinesNum(isCardMultilineSubtitleEnabled ? 1 : 1);
         cardView.enableTextAutoScroll(isCardTextAutoScrollEnabled);
         cardView.setTextScrollSpeed(cardTextScrollSpeed);
         cardView.setFocusable(true);
@@ -84,35 +85,69 @@ public class VideoCardPresenter extends LongClickPresenter {
         cardView.enableBadge(isBadgeEnabled());
         cardView.enableTitle(isTitleEnabled());
         cardView.enableContent(isContentEnabled());
-        cardView.setBackgroundColor(mDefaultBackgroundColor); // background is temporarily visible during animations
-        //if (VERSION.SDK_INT >= 23 && MainUIData.instance(context).isUiTweakEnabled(MainUIData.UI_TWEAK_ROUNDED_CORNERS)) {
-        //    cardView.setForeground(ContextCompat.getDrawable(context, R.drawable.lb_card_outline));
-        //}
+        cardView.setBackgroundColor(Color.TRANSPARENT);
+
+        if (VERSION.SDK_INT >= 21) {
+            final float cornerRadius = context.getResources().getDimension(R.dimen.lb_rounded_rect_corner_radius);
+            cardView.setClipToOutline(true);
+            cardView.setOutlineProvider(new ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerRadius);
+                }
+            });
+
+            View imageWrapper = cardView.findViewById(R.id.main_image_wrapper);
+            if (imageWrapper != null) {
+                imageWrapper.setClipToOutline(true);
+                imageWrapper.setOutlineProvider(new ViewOutlineProvider() {
+                    @Override
+                    public void getOutline(View view, Outline outline) {
+                        outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerRadius);
+                    }
+                });
+                if (VERSION.SDK_INT >= 23) {
+                    imageWrapper.setForeground(ContextCompat.getDrawable(context, R.drawable.lb_card_outline));
+                }
+            }
+        }
+
+        TextView titleText = cardView.findViewById(R.id.title_text);
+        if (titleText != null) {
+            titleText.setEllipsize(TextUtils.TruncateAt.END);
+            titleText.setTextSize(15f);
+            titleText.setIncludeFontPadding(false);
+        }
+
+        TextView contentText = cardView.findViewById(R.id.content_text);
+        if (contentText != null) {
+            contentText.setEllipsize(TextUtils.TruncateAt.END);
+            contentText.setTextSize(12f);
+            contentText.setIncludeFontPadding(false);
+        }
+
         updateCardBackgroundColor(cardView, false);
         return new ViewHolder(cardView);
     }
 
     private void updateCardBackgroundColor(ComplexImageCardView view, boolean selected) {
         int backgroundColor = selected ? mSelectedBackgroundColor : mDefaultBackgroundColor;
-        int textColor = selected ? mSelectedTextColor : mDefaultTextColor;
-
-        // Both background colors should be set because the view's
-        // background is temporarily visible during animations.
-        // NOTE: has visual bug with rounded corners
-        //view.setBackgroundColor(backgroundColor);
+        int titleColor = selected ? mSelectedTextColor : mDefaultTextColor;
+        int contentColor = selected ? Color.parseColor("#555555") : Color.parseColor("#AAAAAA");
 
         View infoField = view.findViewById(R.id.info_field);
         if (infoField != null) {
             infoField.setBackgroundColor(backgroundColor);
+            infoField.setPadding(10, 8, 10, 8);
         }
 
         TextView titleText = view.findViewById(R.id.title_text);
         if (titleText != null) {
-            titleText.setTextColor(textColor);
+            titleText.setTextColor(titleColor);
         }
         TextView contentText = view.findViewById(R.id.content_text);
         if (contentText != null) {
-            contentText.setTextColor(textColor);
+            contentText.setTextColor(contentColor);
         }
     }
 
@@ -151,24 +186,17 @@ public class VideoCardPresenter extends LongClickPresenter {
         }
 
         Glide.with(context)
-                //.asBitmap() // disable animation (webp, gif)
                 .load(ClickbaitRemover.updateThumbnail(video, mThumbQuality))
-                //.placeholder(mDefaultCardImage)
                 .apply(ViewUtil.glideOptions())
-                // improve image compression on low end devices
                 .override(mWidth, mHeight)
-                // com.liskovsoft.smartyoutubetv2.tv.util.CacheGlideModule
-                // Cache makes app crashing on old android versions
                 .diskCacheStrategy(VERSION.SDK_INT > 21 ? DiskCacheStrategy.ALL : DiskCacheStrategy.NONE)
                 .listener(mErrorListener)
                 .error(
-                    // Updated thumbnail url not found
                     Glide.with(context)
-                        .load(video.cardImageUrl) // always working
-                        //.placeholder(mDefaultCardImage)
+                        .load(video.cardImageUrl)
                         .apply(ViewUtil.glideOptions())
                         .listener(mErrorListener)
-                        .error(R.drawable.card_placeholder) // R.color.lb_grey
+                        .error(R.drawable.card_placeholder)
                 )
                 .into(cardView.getMainImageView());
     }
@@ -183,7 +211,6 @@ public class VideoCardPresenter extends LongClickPresenter {
         cardView.setBadgeImage(null);
         cardView.setMainImage(null);
 
-        // Cleanup Glide resources. https://chatgpt.com/share/682120c5-e428-8010-b848-371b2dec0cd5
         Glide.with(cardView.getContext().getApplicationContext()).clear(cardView.getMainImageView());
     }
 
@@ -193,7 +220,7 @@ public class VideoCardPresenter extends LongClickPresenter {
         mWidth = dimens.first;
         mHeight = dimens.second;
     }
-    
+
     protected Pair<Integer, Integer> getCardDimensPx(Context context) {
         return GridFragmentHelper.getCardDimensPx(context, R.dimen.card_width, R.dimen.card_height, MainUIData.instance(context).getVideoGridScale());
     }
@@ -259,4 +286,4 @@ public class VideoCardPresenter extends LongClickPresenter {
             return false;
         }
     };
-}
+            }
