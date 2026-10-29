@@ -428,15 +428,16 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
 
         String[] split = Helpers.splitData(data);
 
+        // === NEW CHANGE CODE: Default Clean YouTube TV UI Settings ===
         //mIsCardAnimatedPreviewsEnabled = Helpers.parseBoolean(split, 0, true);
-        mVideoGridScale = Helpers.parseFloat(split, 1, 1.0f); // 4 cards in a row
+        mVideoGridScale = Helpers.parseFloat(split, 1, 1.15f); // Wide YouTube TV Poster Size
         mUIScale = Helpers.parseFloat(split, 2, 1.0f);
         mColorSchemeIndex = Helpers.parseInt(split, 3, 1);
         mIsCardMultilineTitleEnabled = Helpers.parseBoolean(split, 4, true);
         mChannelCategorySorting = Helpers.parseInt(split, 5, CHANNEL_SORTING_LAST_VIEWED);
         mPlaylistsStyle = Helpers.parseInt(split, 6, PLAYLISTS_STYLE_GRID);
-        mCardTitleLinesNum = Helpers.parseInt(split, 7, 1);
-        mIsCardTextAutoScrollEnabled = Helpers.parseBoolean(split, 8, true);
+        mCardTitleLinesNum = Helpers.parseInt(split, 7, 2); // Clean 2-line bottom title
+        mIsCardTextAutoScrollEnabled = Helpers.parseBoolean(split, 8, false); // Prevent faulty scrolling text
         mIsUploadsOldLookEnabled = Helpers.parseBoolean(split, 9, false);
         mIsUploadsAutoLoadEnabled = Helpers.parseBoolean(split, 10, true);
         mCardTextScrollSpeed = Helpers.parseFloat(split, 11, 2);
@@ -541,4 +542,4 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
         restoreState();
         onDataChange();
     }
-}
+    }
