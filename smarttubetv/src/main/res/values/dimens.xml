@@ -87,7 +87,7 @@
     <!--<item name="lb_search_orb_focused_zoom" type="fraction">120%</item>-->
 
     <!-- MOD: Zoom factor of focused sidebar header (default: 1.2) -->
-    <!--<item format="float" name="lb_browse_header_select_scale" type="dimen">1.2</item>-->
+    <item format="float" name="lb_browse_header_select_scale" type="dimen">1.0</item>
 
     <!--
     Space between cards. Origin: 8dp More info:
