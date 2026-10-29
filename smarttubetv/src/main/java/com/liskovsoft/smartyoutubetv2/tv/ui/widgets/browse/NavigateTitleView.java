@@ -22,6 +22,7 @@ import com.liskovsoft.mediaserviceinterfaces.oauth.Account;
 import com.liskovsoft.sharedutils.locale.LocaleUtility;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.PlaybackPresenter;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.SearchPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AccountSelectionPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.settings.AccountSettingsPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.settings.LanguageSettingsPresenter;
@@ -45,17 +46,12 @@ import static androidx.leanback.widget.TitleViewAdapter.BRANDING_VIEW_VISIBLE;
 import static androidx.leanback.widget.TitleViewAdapter.FULL_VIEW_VISIBLE;
 import static androidx.leanback.widget.TitleViewAdapter.SEARCH_VIEW_VISIBLE;
 
-/**
- * View that supports dpad navigation between children<br/>
- * NOTE: You should set android:nextFocusLeft and android:nextFocusRight<br/>
- * https://stackoverflow.com/questions/38169378/use-multiple-orb-buttons-or-other-buttons-in-the-leanbacks-title-view<br/>
- * https://stackoverflow.com/questions/40802470/add-button-to-browsefragment
- */
 public class NavigateTitleView extends TitleView implements OnDataChange, AccountChangeListener {
     private LongClickSearchOrbView mAccountView;
     private SearchOrbView mLanguageView;
     private SearchOrbView mExitPip;
     private TextView mPipTitle;
+    private TextView mSearchPillBar;
     private int mSearchVisibility = View.INVISIBLE;
     private int mBrandingVisibility = View.INVISIBLE;
     private DateTimeView mGlobalClock;
@@ -80,18 +76,13 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
 
     public NavigateTitleView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-
-        // findViewById is null in constructor. Init mAccountView later.
     }
 
     @Override
     public View focusSearch(View focused, int direction) {
         View nextFoundFocusableViewInLayout = null;
 
-        // Only concerned about focusing left and right at the moment
         if (direction == View.FOCUS_LEFT || direction == View.FOCUS_RIGHT) {
-
-            // Try to find the next focusable item in this layout for the supplied direction
             int nextFoundFocusableViewInLayoutId = -1;
             switch(direction) {
                 case View.FOCUS_LEFT :
@@ -102,13 +93,11 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
                     break;
             }
 
-            // View id for next focus direction found....get the View
             if (nextFoundFocusableViewInLayoutId != -1) {
                 nextFoundFocusableViewInLayout = findViewById(nextFoundFocusableViewInLayoutId);
             }
         }
 
-        //  Return the found View in the layout if it's focusable
         if (nextFoundFocusableViewInLayout != null && nextFoundFocusableViewInLayout != focused && nextFoundFocusableViewInLayout.isFocusable()) {
             if (nextFoundFocusableViewInLayout.getVisibility() == View.VISIBLE) {
                 return nextFoundFocusableViewInLayout;
@@ -116,22 +105,20 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
                 return focusSearch(nextFoundFocusableViewInLayout, direction);
             }
         } else {
-            // No focusable view found in layout...propagate to super (should invoke the BrowseFrameLayout.OnFocusSearchListener
             return super.focusSearch(focused, direction);
         }
     }
 
     @Override
     protected boolean onRequestFocusInDescendants(int direction, Rect previouslyFocusedRect) {
-        // Gives focus to the SearchOrb first....if not...default to normal descendant focus search
+        if (mSearchPillBar != null && mSearchPillBar.getVisibility() == View.VISIBLE && mSearchPillBar.requestFocus()) {
+            return true;
+        }
         return getSearchAffordanceView().requestFocus() || super.onRequestFocusInDescendants(direction, previouslyFocusedRect);
     }
 
     @Override
     public void updateComponentsVisibility(int flags) {
-        // Fix for: Fatal Exception: java.lang.IllegalStateException
-        // Fragment has not been attached yet.
-        // Inside: super.updateComponentsVisibility(flags);
         if (getWindowToken() == null) {
             return;
         }
@@ -150,6 +137,13 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
 
         if (mIsSearchOrbEnabled) {
             mSearchOrbView.setVisibility(View.GONE);
+            if (mSearchPillBar != null) {
+                mSearchPillBar.setVisibility(View.GONE);
+            }
+        } else {
+            if (mSearchPillBar != null) {
+                mSearchPillBar.setVisibility(mSearchVisibility);
+            }
         }
 
         if (mIsAccountViewEnabled) {
@@ -167,9 +161,6 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
 
         if (mIsGlobalClockEnabled) {
             mGlobalClock.setVisibility(mBrandingVisibility);
-        }
-
-        if (mIsGlobalClockEnabled) {
             mGlobalDate.setVisibility(mBrandingVisibility);
         }
     }
@@ -193,6 +184,14 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         MainUIData mainUIData = MainUIData.instance(getContext());
 
         mSearchOrbView = findViewById(R.id.title_orb);
+        mSearchPillBar = findViewById(R.id.yt_search_pill_bar);
+
+        if (mSearchPillBar != null) {
+            mSearchPillBar.setOnClickListener(v -> SearchPresenter.instance(getContext()).startSearch(null));
+            mSearchPillBar.setOnFocusChangeListener((v, hasFocus) ->
+                    mSearchPillBar.setTextColor(hasFocus ? Color.parseColor("#0F0F0F") : Color.parseColor("#EBEBEB"))
+            );
+        }
 
         mAccountView = findViewById(R.id.account_orb);
         mAccountView.setOnOrbClickedListener(v -> AccountSelectionPresenter.instance(getContext()).nextAccountOrDialog());
@@ -231,14 +230,16 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         mIsLanguageViewEnabled = mainUIData.isTopButtonEnabled(MainUIData.TOP_BUTTON_CHANGE_LANGUAGE);
         mIsGlobalClockEnabled = GeneralData.instance(getContext()).isGlobalClockEnabled();
 
-        mSearchOrbView.setVisibility(mIsSearchOrbEnabled ? View.VISIBLE : View.GONE);
+        mSearchOrbView.setVisibility(mIsSearchOrbEnabled ? View.GONE : View.VISIBLE);
+        if (mSearchPillBar != null) {
+            mSearchPillBar.setVisibility(mIsSearchOrbEnabled ? View.GONE : View.VISIBLE);
+        }
         mAccountView.setVisibility(mIsAccountViewEnabled ? View.VISIBLE : View.GONE);
         mLanguageView.setVisibility(mIsLanguageViewEnabled ? View.VISIBLE : View.GONE);
         mGlobalClock.setVisibility(mIsGlobalClockEnabled ? View.VISIBLE : View.GONE);
         mGlobalDate.setVisibility(mIsGlobalClockEnabled ? View.VISIBLE : View.GONE);
 
-        Utils.postDelayed(this::updateAccountIcon, 1_000); // give a time to engine to fetch an updated icon url
-        //updateAccountIcon();
+        Utils.postDelayed(this::updateAccountIcon, 1_000);
         updateLanguageIcon();
     }
 
@@ -246,7 +247,7 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
     protected void onVisibilityChanged(@NonNull View changedView, int visibility) {
         super.onVisibilityChanged(changedView, visibility);
 
-        if (visibility == View.VISIBLE) { // scroll grid up, scroll grid down
+        if (visibility == View.VISIBLE) {
             applyPipParameters();
         }
     }
@@ -255,7 +256,7 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         super.onWindowFocusChanged(hasWindowFocus);
 
-        if (hasWindowFocus) { // pip window closed, dialog closed
+        if (hasWindowFocus) {
             applyPipParameters();
         }
     }
@@ -288,7 +289,6 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         if (current != null && current.getAvatarImageUrl() != null) {
             loadIcon(mAccountView, current.getAvatarImageUrl(), false);
             String accountName = current.getName() != null ? current.getName() : current.getEmail();
-            //TooltipCompatHandler.setTooltipText(mAccountView, Utils.updateTooltip(getContext(), accountName));
             TooltipCompatHandler.setTooltipText(mAccountView, accountName);
         } else {
             Colors orbColors = mAccountView.getOrbColors();
@@ -303,10 +303,9 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
             return;
         }
 
-        // Use delay to fix icon initialization on app boot
         Utils.postDelayed(() -> {
             Locale locale = LocaleUtility.getCurrentLocale(getContext());
-            loadIcon(mLanguageView, Utils.getCountryFlagUrl(locale.getCountry()), true); // flag server could be down
+            loadIcon(mLanguageView, Utils.getCountryFlagUrl(locale.getCountry()), true);
             TooltipCompatHandler.setTooltipText(mLanguageView, String.format("%s (%s)", locale.getDisplayCountry(), locale.getDisplayLanguage()));
         }, 100);
     }
@@ -316,7 +315,6 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
             return;
         }
 
-        // The view with GONE visibility has zero width and height
         if (view.getWidth() <= 0 || view.getHeight() <= 0) {
             Utils.postDelayed(() -> loadIcon(view, url, useCache), 500);
             return;
@@ -328,7 +326,6 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
             return;
         }
 
-        // Size of the view might increase after icon change (bug on some firmwares). So, it's better to cache initial values.
         if (mIconWidth == 0 || mIconHeight == 0) {
             mIconWidth = view.getWidth();
             mIconHeight = view.getHeight();
@@ -337,7 +334,6 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         try {
             loadIcon(context, view, url, mIconWidth, mIconHeight, useCache);
         } catch (ExceptionInInitializerError e) {
-            // Glide Kivi error
             e.printStackTrace();
         }
     }
@@ -347,7 +343,7 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
                 .load(url)
                 .apply(ViewUtil.glideOptions())
                 .diskCacheStrategy(useCache ? DiskCacheStrategy.ALL : DiskCacheStrategy.NONE)
-                .circleCrop() // resize image
+                .circleCrop()
                 .into(new SimpleTarget<Drawable>(iconWidth, iconHeight) {
                     @Override
                     public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
@@ -364,7 +360,6 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
             updateButtonsVisibility();
             updateComponentsVisibility(mFlags);
         } catch (IllegalStateException e) {
-            // Fragment BrowseFragment has not been attached yet.
             e.printStackTrace();
         }
     }
