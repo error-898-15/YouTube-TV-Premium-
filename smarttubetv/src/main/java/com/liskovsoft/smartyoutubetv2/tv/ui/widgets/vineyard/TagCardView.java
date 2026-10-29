@@ -30,14 +30,14 @@ public class TagCardView extends BaseCardView {
         setFocusable(false);
         setFocusableInTouchMode(false);
         setCardType(CARD_TYPE_MAIN_ONLY);
-        setBackgroundResource(R.color.primary_light);
+        setBackgroundResource(R.drawable.yt_search_pill_bg);
 
         LayoutInflater inflater = LayoutInflater.from(getContext());
         View view = inflater.inflate(R.layout.view_tag_card, this);
 
         mTagNameText = view.findViewById(R.id.text_tag_name);
         mResultImage = view.findViewById(R.id.image_icon);
-        
+
         TypedArray cardAttrs =
                 getContext().obtainStyledAttributes(
                         styleResId, R.styleable.lbImageCardView);
@@ -49,8 +49,12 @@ public class TagCardView extends BaseCardView {
     }
 
     public void setCardIcon(int resource) {
-        mResultImage.setVisibility(View.VISIBLE);
-        mResultImage.setImageDrawable(ContextCompat.getDrawable(getContext(), resource));
+        if (resource > 0) {
+            mResultImage.setVisibility(View.VISIBLE);
+            mResultImage.setImageDrawable(ContextCompat.getDrawable(getContext(), resource));
+        } else {
+            mResultImage.setVisibility(View.GONE);
+        }
     }
 
     private static Context getStyledContext(Context context, AttributeSet attrs, int defStyleAttr) {
@@ -59,10 +63,8 @@ public class TagCardView extends BaseCardView {
     }
 
     private static int getImageCardViewStyle(Context context, AttributeSet attrs, int defStyleAttr) {
-        // Read style attribute defined in XML layout.
         int style = null == attrs ? 0 : attrs.getStyleAttribute();
         if (0 == style) {
-            // Not found? Read global ImageCardView style from Theme attribute.
             TypedArray styledAttrs =
                     context.obtainStyledAttributes(
                             R.styleable.LeanbackTheme);
