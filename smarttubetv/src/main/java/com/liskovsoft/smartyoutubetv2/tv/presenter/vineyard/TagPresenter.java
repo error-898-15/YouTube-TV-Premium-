@@ -1,11 +1,8 @@
 package com.liskovsoft.smartyoutubetv2.tv.presenter.vineyard;
 
-import android.os.Build.VERSION;
+import android.graphics.Color;
 import android.view.ViewGroup;
 
-import androidx.core.content.ContextCompat;
-import com.liskovsoft.sharedutils.helpers.Helpers;
-import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.common.app.models.search.vineyard.Tag;
 import com.liskovsoft.smartyoutubetv2.common.app.models.search.vineyard.User;
@@ -13,26 +10,17 @@ import com.liskovsoft.smartyoutubetv2.tv.presenter.base.LongClickPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.ui.widgets.vineyard.TagCardView;
 
 public class TagPresenter extends LongClickPresenter {
-    private static int sDefaultBackgroundColor;
     private static int sDefaultTextColor;
-    private static int sSelectedBackgroundColor;
     private static int sSelectedTextColor;
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent) {
-        sDefaultBackgroundColor =
-                ContextCompat.getColor(parent.getContext(), Helpers.getThemeAttr(parent.getContext(), R.attr.cardDefaultBackground));
-        sDefaultTextColor =
-                ContextCompat.getColor(parent.getContext(), R.color.card_default_text);
-        sSelectedBackgroundColor =
-                ContextCompat.getColor(parent.getContext(), R.color.card_selected_background_white);
-        sSelectedTextColor =
-                ContextCompat.getColor(parent.getContext(), R.color.card_selected_text_grey);
+        sDefaultTextColor = Color.parseColor("#F1F1F1");
+        sSelectedTextColor = Color.parseColor("#0F0F0F");
 
         TagCardView cardView = new TagCardView(parent.getContext()) {
             @Override
             public void setSelected(boolean selected) {
-                updateCardBackgroundColor(this, selected);
                 updateCardTextColor(this, selected);
                 super.setSelected(selected);
             }
@@ -40,16 +28,9 @@ public class TagPresenter extends LongClickPresenter {
 
         cardView.setFocusable(true);
         cardView.setFocusableInTouchMode(true);
-        updateCardBackgroundColor(cardView, false);
+        cardView.setBackgroundResource(R.drawable.yt_search_pill_bg);
         updateCardTextColor(cardView, false);
-        //if (VERSION.SDK_INT >= 23 && MainUIData.instance(parent.getContext()).isUiTweakEnabled(MainUIData.UI_TWEAK_ROUNDED_CORNERS)) {
-        //    cardView.setForeground(ContextCompat.getDrawable(parent.getContext(), R.drawable.lb_card_outline));
-        //}
         return new ViewHolder(cardView);
-    }
-
-    private static void updateCardBackgroundColor(TagCardView view, boolean selected) {
-        view.setBackgroundColor(selected ? sSelectedBackgroundColor : sDefaultBackgroundColor);
     }
 
     private static void updateCardTextColor(TagCardView view, boolean selected) {
@@ -66,7 +47,7 @@ public class TagPresenter extends LongClickPresenter {
 
             if (post.tag != null) {
                 cardView.setCardText(post.tag);
-                //cardView.setCardIcon(R.drawable.ic_tag);
+                cardView.setCardIcon(R.drawable.icon_trending);
             }
         } else if (item instanceof User) {
             User post = (User) item;
@@ -81,7 +62,5 @@ public class TagPresenter extends LongClickPresenter {
 
     @Override
     public void onUnbindViewHolder(ViewHolder viewHolder) {
-
     }
-
-}
+    }
