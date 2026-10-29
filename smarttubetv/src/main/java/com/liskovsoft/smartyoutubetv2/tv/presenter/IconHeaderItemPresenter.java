@@ -10,6 +10,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.core.widget.ImageViewCompat;
 import androidx.leanback.widget.HeaderItem;
 import androidx.leanback.widget.ListRow;
 import androidx.leanback.widget.PageRow;
@@ -66,6 +67,8 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
         ImageView iconView = rootView.findViewById(R.id.header_icon);
         if (iconView != null) {
             if (mIconUrl != null) {
+                ImageViewCompat.setImageTintList(iconView, null);
+
                 Glide.with(rootView.getContext())
                         .load(mIconUrl)
                         .apply(ViewUtil.glideOptions().error(mDefaultIcon))
@@ -76,6 +79,8 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
             } else {
                 Drawable icon = mResId > 0 ? ContextCompat.getDrawable(rootView.getContext(), mResId) : mDefaultIcon;
                 iconView.setImageDrawable(icon);
+                ImageViewCompat.setImageTintList(iconView,
+                        mResId > 0 ? ContextCompat.getColorStateList(rootView.getContext(), R.color.header_content_color) : null);
             }
         }
 
@@ -110,4 +115,4 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
             return false;
         }
     };
-}
+    }
