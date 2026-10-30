@@ -4,13 +4,25 @@ on:
   push:
     branches: [ "master" ]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Release to ALL users (they get the update). Keep OFF for private testing.'
+        type: boolean
+        default: false
+      changelog:
+        description: 'What is new (shown to users). Separate lines with |'
+        type: string
+        default: 'Bug fixes and improvements'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       HAS_SIGNING_KEY: ${{ secrets.SIGNING_KEY != '' }}
       HAS_VT_KEY: ${{ secrets.VIRUS_TOTAL_API_KEY != '' }}
+      PUBLISH: ${{ inputs.publish && 'true' || 'false' }}
 
     steps:
       - name: Checkout Code
@@ -25,6 +37,12 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: Check Signing Key Before Public Release
+        if: ${{ env.PUBLISH == 'true' && env.HAS_SIGNING_KEY != 'true' }}
+        run: |
+          echo "Public release needs the signing secrets (SIGNING_KEY etc). Add them first."
+          exit 1
+
       - name: Create Source Code Zip
         run: |
           # Zip the source exactly as committed (before the version name is changed and before signing files are created).
@@ -37,6 +55,12 @@ jobs:
           # Keep the original code to make the nightly and original builds interchangeable
           sed -i "s/versionName \"\(.*\)\"/versionName \"\1-nightly-${{ github.run_number }}\"/" smarttubetv/build.gradle
           echo "VERSION_NAME=$(grep "versionName" smarttubetv/build.gradle | head -n 1 | awk -F'"' '{print $2}')" >> $GITHUB_OUTPUT
+          # Every build gets a higher versionCode, so Android and the in-app updater see it as a newer version
+          VERSION_CODE=$((10000 + ${{ github.run_number }}))
+          sed -i -E "s/^([[:space:]]*)versionCode [0-9]+/\1versionCode $VERSION_CODE/" smarttubetv/build.gradle
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_OUTPUT
+          # Point the in-app updater to THIS repo (not the original SmartTube)
+          sed -i "s#https://github.com/yuliskov/SmartTubeNext/releases/download/latest/smarttube_beta2.json#https://github.com/${{ github.repository }}/releases/download/latest/update.json#" common/src/stbeta/res/values/update_urls.xml
 
       - name: Do Not Fail Build On Lint Errors
         run: |
@@ -135,3 +159,58 @@ jobs:
           name: SmartTube_${{ steps.get_version.outputs.VERSION_NAME }}_x86
           path: ./smarttubetv/build/outputs/apk/stbeta/release/*_x86.apk
           if-no-files-found: error
+
+      - name: Create Release (private draft for testing, public for real release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ steps.get_version.outputs.VERSION_NAME }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          cp "${{ runner.temp }}/SmartTube_Source.zip" "SmartTube_Source_${VERSION_NAME}.zip"
+          if [ "$PUBLISH" = "true" ]; then
+            MODE=""
+            TITLE="SmartTube ${VERSION_NAME}"
+          else
+            MODE="--draft"
+            TITLE="TEST (private) SmartTube ${VERSION_NAME}"
+          fi
+          gh release create "v${VERSION_NAME}" \
+            ./smarttubetv/build/outputs/apk/stbeta/release/*.apk \
+            "SmartTube_Source_${VERSION_NAME}.zip" \
+            --target "${{ github.sha }}" \
+            --title "$TITLE" \
+            --notes "Build #${{ github.run_number }}: ${COMMIT_MSG}" \
+            $MODE
+
+      - name: Update Auto-Update Channel (only for public release)
+        if: ${{ env.PUBLISH == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ steps.get_version.outputs.VERSION_NAME }}
+          VERSION_CODE: ${{ steps.get_version.outputs.VERSION_CODE }}
+          REPO: ${{ github.repository }}
+          CHANGELOG: ${{ inputs.changelog }}
+        run: |
+          python3 - <<'PY'
+          import json, os, glob
+          v = os.environ["VERSION_NAME"]
+          vc = int(os.environ["VERSION_CODE"])
+          base = "https://github.com/%s/releases/download/v%s/" % (os.environ["REPO"], v)
+          d = "smarttubetv/build/outputs/apk/stbeta/release/"
+          def url(suffix):
+              f = glob.glob(d + "*_" + suffix + ".apk")
+              return [base + os.path.basename(f[0])] if f else []
+          pkg = {}
+          for abi in ("arm64-v8a", "armeabi-v7a", "x86"):
+              u = url(abi)
+              if u:
+                  pkg["downloadUrlList_" + abi] = u
+          uni = url("universal")
+          pkg["downloadUrlList"] = uni
+          pkg["downloadUrl"] = uni[0]
+          notes = [x.strip() for x in os.environ.get("CHANGELOG", "").split("|") if x.strip()] or ["Bug fixes and improvements"]
+          json.dump({"package": pkg, v: {"versionCode": vc, "changelog": notes}}, open("update.json", "w"), indent=2)
+          PY
+          cat update.json
+          gh release view latest >/dev/null 2>&1 || gh release create latest --target "${{ github.sha }}" --title "Auto-update channel (do not delete)" --notes "The app reads update.json from here to find new versions. Do not delete." --latest=false
+          gh release upload latest update.json --clobber
