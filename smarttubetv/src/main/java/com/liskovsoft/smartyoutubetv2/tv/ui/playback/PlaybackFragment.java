@@ -125,6 +125,8 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private Boolean mIsControlsShownPreviously;
     private Video mPendingFocus;
     private String mSelectedVideoId;
+    // === NEW CHANGE CODE ===
+    private ShortsOverlayHelper mShortsOverlayHelper;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -171,6 +173,10 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         // We should use internal progress manager because it's used in many places like Exo engine etc.
         // ProgressBar.setRootView already called at this moment.
         ProgressBarManager.setup(getProgressBarManager(), (ViewGroup) root);
+
+        // === NEW CHANGE CODE ===
+        mShortsOverlayHelper = new ShortsOverlayHelper(this);
+        mShortsOverlayHelper.init(root);
 
         return root;
     }
@@ -253,8 +259,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         //ExoPlayerInitializer.enableAudioFocus(mPlayer, false); // Disable focus in PIP
     }
 
+    // === NEW CHANGE CODE ===
     public void onDispatchKeyEvent(KeyEvent event) {
-        // NOP
+        if (mShortsOverlayHelper != null && mShortsOverlayHelper.onKeyDown(event)) {
+            return;
+        }
     }
 
     public void onDispatchTouchEvent(MotionEvent event) {
@@ -844,6 +853,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
             mPlayerGlue.setSubtitle(video.getSecondTitleFull() != null ? createSubtitle(video) : "...");
             mPlayerGlue.setVideo(video);
         }
+
+        // === NEW CHANGE CODE ===
+        if (mShortsOverlayHelper != null) {
+            mShortsOverlayHelper.updateVideo(video);
+        }
     }
 
     @Override
@@ -1264,6 +1278,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
      */
     @Override
     public void showOverlay(boolean show) {
+        // === NEW CHANGE CODE ===
+        if (mShortsOverlayHelper != null && mShortsOverlayHelper.isShortsActive() && show) {
+            return;
+        }
+
         if (forbidShowOverlay(show)) {
             return;
         }
@@ -1316,12 +1335,20 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         if (mPlayerGlue != null) {
             mPlayerGlue.setButtonState(buttonId, buttonState);
         }
+        // === NEW CHANGE CODE ===
+        if (mShortsOverlayHelper != null) {
+            mShortsOverlayHelper.updateButtonState(buttonId, buttonState);
+        }
     }
 
     @Override
     public void setChannelIcon(String iconUrl) {
         if (mPlayerGlue != null) {
             mPlayerGlue.setChannelIcon(iconUrl);
+        }
+        // === NEW CHANGE CODE ===
+        if (mShortsOverlayHelper != null) {
+            mShortsOverlayHelper.updateChannelIcon(iconUrl);
         }
     }
 
