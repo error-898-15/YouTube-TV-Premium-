@@ -1,3 +1,4 @@
+// File Path: common/src/main/java/com/liskovsoft/smartyoutubetv2/common/app/models/playback/controllers/VideoLoaderController.java
 package com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers;
 
 import android.os.Build.VERSION;
@@ -47,7 +48,7 @@ public class VideoLoaderController extends BasePlayerController {
     };
     private final Runnable mRestartEngine = () -> {
         if (getPlayer() != null) {
-            getPlayer().restartEngine(); // properly save position of the current track
+            getPlayer().restartEngine();
         }
     };
     private final Runnable mOnApplyPlaybackMode = () -> {
@@ -85,9 +86,8 @@ public class VideoLoaderController extends BasePlayerController {
             item.fromQueue = false;
         }
 
-        if (getPlayer() != null && getPlayer().isEngineInitialized()) { // player is initialized
-            // Fix improperly resized video after exit from PIP (Device Formuler Z8 Pro)
-            loadVideo(item); // force play immediately even the same video
+        if (getPlayer() != null && getPlayer().isEngineInitialized()) {
+            loadVideo(item);
         } else {
             mPendingVideo = item;
         }
@@ -116,8 +116,6 @@ public class VideoLoaderController extends BasePlayerController {
         }
         
         getPlayer().setButtonState(R.id.action_repeat, video.finishOnEnded ? PlayerConstants.PLAYBACK_MODE_CLOSE : getPlayerData().getPlaybackMode());
-        // Can't set title at this point
-        //checkSleepTimer();
     }
 
     @Override
@@ -174,7 +172,6 @@ public class VideoLoaderController extends BasePlayerController {
             return;
         }
 
-        // Stop the playback if the user is browsing options or reading comments
         int playbackMode = getPlaybackMode();
         if (getAppDialogPresenter().isDialogShown() && !getAppDialogPresenter().isOverlay() && playbackMode != PlayerConstants.PLAYBACK_MODE_ONE) {
             getAppDialogPresenter().setOnFinish(mOnApplyPlaybackMode);
@@ -198,9 +195,6 @@ public class VideoLoaderController extends BasePlayerController {
         return false;
     }
 
-    /**
-     * Force load and play!
-     */
     private void loadVideo(Video item) {
         if (getPlayer() != null && item != null) {
             mPlaylist.setCurrent(item);
@@ -210,9 +204,6 @@ public class VideoLoaderController extends BasePlayerController {
         }
     }
 
-    /**
-     * Force load suggestions.
-     */
     private void loadSuggestions(Video item) {
         if (getPlayer() == null) {
             return;
@@ -232,12 +223,10 @@ public class VideoLoaderController extends BasePlayerController {
 
         if (current.nextMediaItem != null) {
             openVideoInt(Video.from(current.nextMediaItem));
-        } else if (!current.isSynced) { // Maybe there's nothing left. E.g. when casting from phone
-            // Wait in a loop while suggestions have been loaded...
+        } else if (!current.isSynced) {
             if (showLoadingMsg) {
                 MessageHelpers.showMessage(getContext(), R.string.wait_data_loading);
             }
-            // Short videos next fix (suggestions aren't loaded yet)
             boolean isEnded = getPlayer() != null && Math.abs(getPlayer().getDurationMs() - getPlayer().getPositionMs()) < 100;
             if (isEnded) {
                 Utils.postDelayed(mMetadataSync, 1_000);
@@ -250,8 +239,6 @@ public class VideoLoaderController extends BasePlayerController {
             return;
         }
 
-        // Fix no progress on next video (the engine may still buffering a bit)
-        //getPlayer().showProgressBar(true);
         Utils.post(mShowProgressBar);
         disposeActions();
 
@@ -276,7 +263,6 @@ public class VideoLoaderController extends BasePlayerController {
 
         getVideo().sync(formatInfo);
 
-        // Fix stretched video for a couple milliseconds (before the onVideoSizeChanged gets called)
         applyAspectRatio(formatInfo);
 
         if (formatInfo.getPaidContentText() != null && getSponsorBlockData().isPaidContentNotificationEnabled()) {
@@ -294,10 +280,9 @@ public class VideoLoaderController extends BasePlayerController {
             mSuggestionsController.loadSuggestions(getVideo());
             bgImageUrl = getVideo().getBackgroundUrl();
 
-            // 18+ video or the video is hidden/removed
             player.showOverlay(true);
             loadNextVideo(5_000);
-        } else if (acceptAdaptiveFormats(formatInfo) && formatInfo.containsDashFormats() && !preferSabrLive(formatInfo)) {
+        } else if (acceptAdaptiveFormats(formatInfo) && formatInfo.containsDashFormats()) {
             Log.d(TAG, "Loading regular video in dash format...");
 
             if (getPlayerTweaksData().isHighBitrateFormatsEnabled() && formatInfo.hasExtendedHlsFormats()) {
@@ -305,7 +290,7 @@ public class VideoLoaderController extends BasePlayerController {
             } else {
                 player.openDash(formatInfo);
             }
-        } else if (acceptAdaptiveFormats(formatInfo) && formatInfo.containsSabrFormats()) {
+        } else if (acceptAdaptiveFormats(formatInfo) && formatInfo.containsSabrFormats() && !formatInfo.isLive()) {
             Log.d(TAG, "Loading video in sabr format...");
             player.openSabr(formatInfo);
         } else if (acceptDashLive(formatInfo)) {
@@ -327,7 +312,7 @@ public class VideoLoaderController extends BasePlayerController {
             reloadVideo(30 * 1_000);
         }
 
-        player.showBackground(bgImageUrl); // remove bg (if video playing) or set another bg
+        player.showBackground(bgImageUrl);
     }
 
     private void reloadVideo(int delayMs) {
@@ -367,10 +352,10 @@ public class VideoLoaderController extends BasePlayerController {
         disposeActions();
 
         if (item.hasVideo()) {
-            // NOTE: Next clicked: instant playback even a mix
-            // NOTE: Bypass PIP fullscreen on next caused by startView
+            if (getVideo() != null && (getVideo().isShorts || getVideo().belongsToShortsGroup())) {
+                item.isShorts = true;
+            }
             getMainController().onNewVideo(item);
-            //getPlayer().showOverlay(true);
         } else {
             VideoActionPresenter.instance(getContext()).apply(item);
         }
@@ -400,7 +385,6 @@ public class VideoLoaderController extends BasePlayerController {
         }
 
         Video video = getVideo();
-        // Fix simultaneous videos loading (e.g. when playback ends and user opens new video)
         if (video == null || isActionsRunning()) {
             return;
         }
@@ -413,7 +397,7 @@ public class VideoLoaderController extends BasePlayerController {
             case PlayerConstants.PLAYBACK_MODE_REVERSE_LIST:
                 if (video.hasPlaylist() || video.belongsToChannelUploads() || video.belongsToChannel()) {
                     VideoGroup group = video.getGroup();
-                    if (group != null && group.indexOf(video) != 0) { // stop after first
+                    if (group != null && group.indexOf(video) != 0) {
                         onPreviousClicked();
                     }
                     break;
@@ -424,15 +408,12 @@ public class VideoLoaderController extends BasePlayerController {
                 break;
             case PlayerConstants.PLAYBACK_MODE_ONE:
                 if (VERSION.SDK_INT <= 19) {
-                    // Fix frozen image on Android 4
                     restartEngine();
                 } else {
                     getPlayer().setPositionMs(0);
                 }
                 break;
             case PlayerConstants.PLAYBACK_MODE_CLOSE:
-                // Close player if suggestions not shown
-                // Except when playing from queue
                 if (mPlaylist.getNext() != null && !getPlayerTweaksData().isQueueRespectsPlaybackMode()) {
                     loadNext();
                 } else {
@@ -444,8 +425,6 @@ public class VideoLoaderController extends BasePlayerController {
                 }
                 break;
             case PlayerConstants.PLAYBACK_MODE_PAUSE:
-                // Stop player after each video.
-                // Except when playing from queue
                 if (mPlaylist.getNext() != null && !getPlayerTweaksData().isQueueRespectsPlaybackMode()) {
                     loadNext();
                 } else {
@@ -453,11 +432,9 @@ public class VideoLoaderController extends BasePlayerController {
                 }
                 break;
             case PlayerConstants.PLAYBACK_MODE_LIST:
-                // if video has a playlist load next or restart playlist
                 if (video.hasNextPlaylist() || mPlaylist.getNext() != null) {
                     loadNext();
                 } else {
-                    //restartPlaylistIfNeeded();
                     stopPlayback();
                 }
                 break;
@@ -482,7 +459,7 @@ public class VideoLoaderController extends BasePlayerController {
             return;
         }
         
-        VideoGroup group = getVideo().getGroup(); // Get the VideoGroup (playlist)
+        VideoGroup group = getVideo().getGroup();
 
         if (group != null && !group.isEmpty() && getVideo().belongsToSamePlaylistGroup()) {
             openVideoInt(group.get(0));
@@ -501,13 +478,10 @@ public class VideoLoaderController extends BasePlayerController {
             return false;
         }
 
-        // Not enough info for full length live streams
         if (formatInfo.isLive() && formatInfo.getStartTimeMs() == 0) {
             return false;
         }
 
-        // Live dash url doesn't work with None buffer
-        //if (formatInfo.isLive() && (getPlayerTweaksData().isDashUrlStreamsForced() || getPlayerData().getVideoBufferType() == PlayerData.BUFFER_NONE)) {
         if (formatInfo.isLive() && getPlayerTweaksData().isDashUrlStreamsForced() && formatInfo.containsDashUrl()) {
             return false;
         }
@@ -517,10 +491,6 @@ public class VideoLoaderController extends BasePlayerController {
         }
 
         return true;
-    }
-
-    private boolean preferSabrLive(MediaItemFormatInfo formatInfo) {
-        return getPlayerTweaksData().isSabrLiveEnabled() && formatInfo.isLive() && formatInfo.containsSabrFormats();
     }
 
     private boolean acceptDashLive(MediaItemFormatInfo formatInfo) {
@@ -548,7 +518,6 @@ public class VideoLoaderController extends BasePlayerController {
             return;
         }
 
-        // NOTE: Shuffle only user created playlists (size != -1)
         if (current.playlistInfo.getSize() > MIN_SHUFFLE_SIZE) {
             Video video = new Video();
             video.playlistId = current.playlistId;
@@ -563,53 +532,37 @@ public class VideoLoaderController extends BasePlayerController {
                 player.setNextTitle(Video.from(current.nextMediaItem));
             });
         }
-        //else {
-        //    VideoGroup topRow = player.getSuggestionsByIndex(0); // the playlist row
-        //
-        //    if (topRow != null && topRow.isChapters()) {
-        //        topRow = player.getSuggestionsByIndex(1);
-        //    }
-        //
-        //    if (topRow != null) {
-        //        int currentIdx = topRow.indexOf(current);
-        //        int randomIndex = Utils.getRandomIndex(currentIdx, topRow.getSize());
-        //
-        //        if (randomIndex != -1) {
-        //            Video nextVideo = topRow.get(randomIndex);
-        //            current.nextMediaItem = SimpleMediaItem.from(nextVideo);
-        //            current.isShuffled = true;
-        //            player.setNextTitle(nextVideo);
-        //        }
-        //    }
-        //}
     }
 
+    // === NEW CHANGE CODE: Auto-Scroll Shorts when Loop is disabled ===
     private int getPlaybackMode() {
         int playbackMode = getPlayerData().getPlaybackMode();
 
         Video video = getVideo();
         if (video != null && video.finishOnEnded) {
             playbackMode = PlayerConstants.PLAYBACK_MODE_CLOSE;
-        } else if (video != null && video.belongsToShortsGroup() && getPlayerTweaksData().isLoopShortsEnabled()) {
-            playbackMode = PlayerConstants.PLAYBACK_MODE_ONE;
+        } else if (video != null && (video.isShorts || video.belongsToShortsGroup())) {
+            playbackMode = getPlayerTweaksData().isLoopShortsEnabled()
+                    ? PlayerConstants.PLAYBACK_MODE_ONE
+                    : PlayerConstants.PLAYBACK_MODE_ALL;
         }
         return playbackMode;
     }
 
-    /**
-     * Fix stretched video for a couple milliseconds (before the onVideoSizeChanged gets called)
-     */
     private void applyAspectRatio(MediaItemFormatInfo formatInfo) {
         if (getPlayer() == null) {
             return;
         }
 
-        // Fix stretched video for a couple milliseconds (before the onVideoSizeChanged gets called)
         if (formatInfo.containsDashFormats()) {
             MediaFormat format = formatInfo.getAdaptiveFormats().get(0);
             int width = format.getWidth();
             int height = format.getHeight();
             boolean isShorts = width < height;
+            if (isShorts && getVideo() != null && !getVideo().isShorts) {
+                getVideo().isShorts = true;
+                getPlayer().setVideo(getVideo());
+            }
             if (width > 0 && height > 0 && (getPlayerData().getAspectRatio() == PlayerData.ASPECT_RATIO_DEFAULT || isShorts)) {
                 getPlayer().setAspectRatio((float) width / height);
             } else {
@@ -627,4 +580,4 @@ public class VideoLoaderController extends BasePlayerController {
             MediaServiceManager.instance().loadFormatInfo(mSuggestionsController.getNext(), formatInfo -> {});
         }
     }
-}
+    }
