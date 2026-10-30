@@ -1,8 +1,8 @@
+// File Path: smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/presenter/vineyard/TagPresenter.java
 package com.liskovsoft.smartyoutubetv2.tv.presenter.vineyard;
 
 import android.graphics.Color;
 import android.view.ViewGroup;
-
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.common.app.models.search.vineyard.Tag;
 import com.liskovsoft.smartyoutubetv2.common.app.models.search.vineyard.User;
@@ -28,12 +28,13 @@ public class TagPresenter extends LongClickPresenter {
 
         cardView.setFocusable(true);
         cardView.setFocusableInTouchMode(true);
-        cardView.setBackgroundResource(R.drawable.yt_search_pill_bg);
+        cardView.setBackgroundColor(Color.TRANSPARENT);
         updateCardTextColor(cardView, false);
         return new ViewHolder(cardView);
     }
 
     private static void updateCardTextColor(TagCardView view, boolean selected) {
+        view.setBackgroundColor(Color.TRANSPARENT);
         view.setTextColor(selected ? sSelectedTextColor : sDefaultTextColor);
     }
 
