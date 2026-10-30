@@ -14,17 +14,25 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.core.content.ContextCompat;
+import com.google.android.exoplayer2.ui.AspectRatioFrameLayout;
 import com.bumptech.glide.Glide;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerUI;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.PlaybackPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.menu.VideoMenuPresenter;
+import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
 public class ShortsOverlayHelper {
+    /** Width / height of the rounded Shorts frame (taken from the reference screenshots, ~3:4). */
+    private static final float SHORTS_FRAME_RATIO = 3f / 4f;
+    /** Frame height relative to the screen height. */
+    private static final float SHORTS_FRAME_HEIGHT_PERCENT = 0.88f;
+    /** Frame left margin relative to the screen width. */
+    private static final float SHORTS_FRAME_LEFT_PERCENT = 0.16f;
     private final PlaybackFragment mFragment;
     private View mShortsOverlay;
     private View mSurfaceRoot;
@@ -140,6 +148,7 @@ public class ShortsOverlayHelper {
             return;
         }
 
+        boolean wasShortsActive = mIsShortsActive;
         mIsShortsActive = video != null && (video.isShorts || video.belongsToShortsGroup());
 
         if (mIsShortsActive) {
@@ -151,13 +160,17 @@ public class ShortsOverlayHelper {
             // Position vertical video on the left-center with rounded outline (like Image 13 & 14)
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mSurfaceRoot.getLayoutParams();
             int rootHeight = mSurfaceRoot.getResources().getDisplayMetrics().heightPixels;
-            int targetHeight = (int) (rootHeight * 0.88f);
-            int targetWidth = (int) (targetHeight * (9f / 16f));
+            int targetHeight = (int) (rootHeight * SHORTS_FRAME_HEIGHT_PERCENT);
+            int targetWidth = (int) (targetHeight * SHORTS_FRAME_RATIO);
             lp.width = targetWidth;
             lp.height = targetHeight;
             lp.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
-            lp.leftMargin = (int) (mSurfaceRoot.getResources().getDisplayMetrics().widthPixels * 0.16f);
+            lp.leftMargin = (int) (mSurfaceRoot.getResources().getDisplayMetrics().widthPixels * SHORTS_FRAME_LEFT_PERCENT);
             mSurfaceRoot.setLayoutParams(lp);
+
+            // The video must fill the whole rounded frame (no black bars, no user zoom/resize interference)
+            mFragment.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_ZOOM);
+            mFragment.setZoomPercents(100);
 
             if (VERSION.SDK_INT >= 21) {
                 mSurfaceRoot.setClipToOutline(true);
@@ -206,6 +219,13 @@ public class ShortsOverlayHelper {
             lp.gravity = Gravity.CENTER;
             lp.leftMargin = 0;
             mSurfaceRoot.setLayoutParams(lp);
+
+            // Restore user's regular player settings after leaving Shorts
+            if (wasShortsActive) {
+                Context ctx = mSurfaceRoot.getContext();
+                mFragment.setResizeMode(PlayerData.instance(ctx).getResizeMode());
+                mFragment.setZoomPercents(PlayerData.instance(ctx).getZoomPercents());
+            }
 
             if (VERSION.SDK_INT >= 21) {
                 mSurfaceRoot.setClipToOutline(false);
@@ -259,36 +279,82 @@ public class ShortsOverlayHelper {
         return mIsShortsActive;
     }
 
+    /**
+     * Remote control handling for Shorts.<br/>
+     * UP/DOWN: previous/next Short (only while focus is NOT inside the right panel;
+     * inside the panel they move focus between the buttons as usual).<br/>
+     * RIGHT: move focus into the panel. LEFT: leave the panel. OK: pause/resume.
+     * @return true if the event is consumed (both ACTION_DOWN and ACTION_UP)
+     */
     public boolean onKeyDown(KeyEvent event) {
-        if (!mIsShortsActive || event.getAction() != KeyEvent.ACTION_DOWN) {
+        if (!mIsShortsActive) {
             return false;
         }
 
-        int keyCode = event.getKeyCode();
+        boolean isDown = event.getAction() == KeyEvent.ACTION_DOWN;
         boolean panelFocused = mShortsOverlay != null && mShortsOverlay.hasFocus();
 
-        // Up/Down scrolls to Previous/Next Short immediately when not navigating inside the right panel
-        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !panelFocused) {
-            PlaybackPresenter.instance(mFragment.getContext()).onNextClicked();
-            return true;
-        } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && !panelFocused) {
-            PlaybackPresenter.instance(mFragment.getContext()).onPreviousClicked();
-            return true;
-        } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && !panelFocused) {
-            if (mSubscribeBtn != null) {
-                mSubscribeBtn.requestFocus();
+        switch (event.getKeyCode()) {
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+            case KeyEvent.KEYCODE_DPAD_UP:
+                if (panelFocused) {
+                    return false; // regular focus movement inside the panel
+                }
+                // Single step per key press: ignore auto-repeat so a held key doesn't skip many Shorts
+                if (isDown && event.getRepeatCount() == 0) {
+                    PlaybackPresenter presenter = PlaybackPresenter.instance(mFragment.getContext());
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN) {
+                        presenter.onNextClicked();
+                    } else {
+                        presenter.onPreviousClicked();
+                    }
+                }
                 return true;
-            }
-        } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && panelFocused) {
-            if (mSubscribeBtn != null && mSubscribeBtn.hasFocus()) {
-                mShortsOverlay.clearFocus();
-                return true;
-            }
-        } else if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) && !panelFocused) {
-            mFragment.setPlayWhenReady(!mFragment.getPlayWhenReady());
-            return true;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if (!panelFocused && mSubscribeBtn != null) {
+                    if (isDown) {
+                        mSubscribeBtn.requestFocus();
+                    }
+                    return true;
+                }
+                return false;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (panelFocused && (mSubscribeBtn != null && mSubscribeBtn.hasFocus() ||
+                        isChannelRowFocused())) {
+                    if (isDown) {
+                        leavePanel();
+                    }
+                    return true;
+                }
+                return false;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+                if (!panelFocused) {
+                    if (isDown && event.getRepeatCount() == 0) {
+                        mFragment.setPlayWhenReady(!mFragment.getPlayWhenReady());
+                    }
+                    return true;
+                }
+                return false;
+            default:
+                return false;
         }
+    }
 
-        return false;
+    private boolean isChannelRowFocused() {
+        View row = mShortsOverlay != null ? mShortsOverlay.findViewById(R.id.shorts_channel_row) : null;
+        return row != null && row.hasFocus();
+    }
+
+    /**
+     * Take focus away from the panel and give it back to the player root,
+     * otherwise the first focusable panel child grabs it again and UP/DOWN never change the Short.
+     */
+    private void leavePanel() {
+        mShortsOverlay.clearFocus();
+        View root = mFragment.getView();
+        if (root != null) {
+            root.requestFocus();
+        }
     }
     }
