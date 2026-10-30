@@ -260,10 +260,8 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     // === NEW CHANGE CODE ===
-    public void onDispatchKeyEvent(KeyEvent event) {
-        if (mShortsOverlayHelper != null && mShortsOverlayHelper.onKeyDown(event)) {
-            return;
-        }
+    public boolean onDispatchKeyEvent(KeyEvent event) {
+        return mShortsOverlayHelper != null && mShortsOverlayHelper.onKeyDown(event);
     }
 
     public void onDispatchTouchEvent(MotionEvent event) {
@@ -1141,11 +1139,19 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void setResizeMode(int mode) {
+        // Shorts frame must always be filled by the video: ignore user's resize mode while it's active
+        if (mShortsOverlayHelper != null && mShortsOverlayHelper.isShortsActive()) {
+            mode = com.google.android.exoplayer2.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM;
+        }
         setResize(mode);
     }
 
     @Override
     public void setZoomPercents(int percents) {
+        // Same for the user's zoom
+        if (mShortsOverlayHelper != null && mShortsOverlayHelper.isShortsActive()) {
+            percents = 100;
+        }
         setZoom(percents);
     }
 
