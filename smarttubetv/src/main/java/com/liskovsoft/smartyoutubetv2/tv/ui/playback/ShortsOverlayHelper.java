@@ -177,7 +177,8 @@ public class ShortsOverlayHelper {
                 mTitleView.setText(title != null ? title : "");
             }
 
-            String sub = video.getSecondTitleFull() != null ? video.getSecondTitleFull() : video.getSecondTitle();
+            CharSequence subText = video.getSecondTitleFull() != null ? video.getSecondTitleFull() : video.getSecondTitle();
+            String sub = subText != null ? subText.toString() : null;
             if (mSubtitleView != null) {
                 mSubtitleView.setText(sub != null ? "▶  " + sub : "▶  Shorts");
             }
@@ -290,4 +291,4 @@ public class ShortsOverlayHelper {
 
         return false;
     }
-  }
+    }
