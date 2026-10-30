@@ -58,7 +58,7 @@ jobs:
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
           echo "storeFile=${{ github.workspace }}/key.jks" >> keystore.properties
           echo "${{ secrets.SIGNING_KEY }}" | base64 --decode > ${{ github.workspace }}/key.jks
-
+    
       - name: Grant Gradle permissions
         run: chmod +x gradlew
 
@@ -105,11 +105,7 @@ jobs:
             badge_url="https://badges.cssnr.com/vt/id/$sha256?start=green&end=red&n=8"
             vt_link="https://www.virustotal.com/gui/file/$sha256"
 
-            echo "| $filename | [
-
-![$filename]($badge_url)
-
-]($vt_link) | [View Report]($vt_link) |" >> $GITHUB_STEP_SUMMARY
+            echo "| $filename | [![$filename]($badge_url)]($vt_link) | [View Report]($vt_link) |" >> $GITHUB_STEP_SUMMARY
           done
 
       - name: Upload ARM64 APK
