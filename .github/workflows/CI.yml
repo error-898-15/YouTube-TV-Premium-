@@ -27,8 +27,9 @@ jobs:
 
       - name: Create Source Code Zip
         run: |
-          # Zip the source exactly as committed (before the version name is changed and before signing files are created)
-          zip -r -q "${{ runner.temp }}/SmartTube_Source.zip" . -x ".git/*" "*/.git" "*/.git/*" "*/build/*" ".gradle/*"
+          # Zip the source exactly as committed (before the version name is changed and before signing files are created).
+          # SharedModules and MediaServiceCore are downloaded automatically from upstream on every build, so they are left out to keep the zip small.
+          zip -r -q "${{ runner.temp }}/SmartTube_Source.zip" . -x ".git/*" "*/.git" "*/.git/*" "*/build/*" ".gradle/*" "SharedModules/*" "MediaServiceCore/*"
 
       - name: Update Version Name
         id: get_version
