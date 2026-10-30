@@ -1,3 +1,4 @@
+// File Path: smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/presenter/ShortsCardPresenter.java
 package com.liskovsoft.smartyoutubetv2.tv.presenter;
 
 import android.content.Context;
@@ -10,5 +11,10 @@ public class ShortsCardPresenter extends VideoCardPresenter {
     @Override
     protected Pair<Integer, Integer> getCardDimensPx(Context context) {
         return GridFragmentHelper.getCardDimensPx(context, R.dimen.shorts_card_width, R.dimen.shorts_card_height, MainUIData.instance(context).getVideoGridScale());
+    }
+
+    @Override
+    protected boolean isBadgeEnabled() {
+        return false; // Clean Shorts poster without black "SHORTS" badge overlay
     }
 }
