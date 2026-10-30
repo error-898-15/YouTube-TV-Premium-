@@ -1,3 +1,4 @@
+// File Path: smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/presenter/VideoCardPresenter.java
 package com.liskovsoft.smartyoutubetv2.tv.presenter;
 
 import android.app.Activity;
@@ -22,7 +23,6 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.Target;
-import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
@@ -33,16 +33,8 @@ import com.liskovsoft.smartyoutubetv2.tv.ui.browse.video.GridFragmentHelper;
 import com.liskovsoft.smartyoutubetv2.tv.ui.widgets.complexcardview.ComplexImageCardView;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
-/*
- * A CardPresenter is used to generate Views and bind Objects to them on demand.
- * It contains an Image CardView
- */
 public class VideoCardPresenter extends LongClickPresenter {
     private static final String TAG = VideoCardPresenter.class.getSimpleName();
-    private int mDefaultBackgroundColor = -1;
-    private int mDefaultTextColor = -1;
-    private int mSelectedBackgroundColor = -1;
-    private int mSelectedTextColor = -1;
     private int mCardPreviewType;
     private int mThumbQuality;
     private int mWidth;
@@ -52,18 +44,9 @@ public class VideoCardPresenter extends LongClickPresenter {
     public ViewHolder onCreateViewHolder(ViewGroup parent) {
         Context context = parent.getContext();
 
-        // Clean YouTube TV style transparent unfocused background & white focused card state
-        mDefaultBackgroundColor = Color.TRANSPARENT;
-        mDefaultTextColor = Color.parseColor("#F1F1F1");
-        mSelectedBackgroundColor = Color.parseColor("#FFFFFF");
-        mSelectedTextColor = Color.parseColor("#0F0F0F");
-
         mCardPreviewType = getCardPreviewType(context);
         mThumbQuality = getThumbQuality(context);
 
-        boolean isCardMultilineTitleEnabled = isCardMultilineTitleEnabled(context);
-        boolean isCardMultilineSubtitleEnabled = isCardMultilineSubtitleEnabled(context);
-        boolean isCardTextAutoScrollEnabled = isCardTextAutoScrollEnabled(context);
         float cardTextScrollSpeed = getCardTextScrollSpeed(context);
 
         updateDimensions(context);
@@ -76,54 +59,38 @@ public class VideoCardPresenter extends LongClickPresenter {
             }
         };
 
-        cardView.setTitleLinesNum(isCardMultilineTitleEnabled ? 2 : 1);
-        cardView.setContentLinesNum(isCardMultilineSubtitleEnabled ? 1 : 1);
-        cardView.enableTextAutoScroll(isCardTextAutoScrollEnabled);
+        cardView.setTitleLinesNum(2);
+        cardView.setContentLinesNum(2);
+        cardView.enableTextAutoScroll(false);
         cardView.setTextScrollSpeed(cardTextScrollSpeed);
         cardView.setFocusable(true);
         cardView.setFocusableInTouchMode(true);
         cardView.enableBadge(isBadgeEnabled());
         cardView.enableTitle(isTitleEnabled());
         cardView.enableContent(isContentEnabled());
-        cardView.setBackgroundColor(Color.TRANSPARENT);
 
+        // Remove full card box background so only poster has outline
+        cardView.setBackgroundColor(Color.TRANSPARENT);
+        cardView.setInfoAreaBackgroundColor(Color.TRANSPARENT);
         if (VERSION.SDK_INT >= 21) {
-            final float cornerRadius = context.getResources().getDimension(R.dimen.lb_rounded_rect_corner_radius);
-            cardView.setClipToOutline(true);
-            cardView.setOutlineProvider(new ViewOutlineProvider() {
+            cardView.setClipToOutline(false);
+            cardView.setElevation(0f);
+        }
+
+        // Round only the poster container and add white focus outline to poster only
+        View imageWrapper = cardView.findViewById(R.id.main_image_wrapper);
+        if (imageWrapper != null && VERSION.SDK_INT >= 21) {
+            final int radiusPx = context.getResources().getDimensionPixelSize(R.dimen.lb_rounded_rect_corner_radius);
+            imageWrapper.setClipToOutline(true);
+            imageWrapper.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, Outline outline) {
-                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerRadius);
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radiusPx);
                 }
             });
-
-            View imageWrapper = cardView.findViewById(R.id.main_image_wrapper);
-            if (imageWrapper != null) {
-                imageWrapper.setClipToOutline(true);
-                imageWrapper.setOutlineProvider(new ViewOutlineProvider() {
-                    @Override
-                    public void getOutline(View view, Outline outline) {
-                        outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerRadius);
-                    }
-                });
-                if (VERSION.SDK_INT >= 23) {
-                    imageWrapper.setForeground(ContextCompat.getDrawable(context, R.drawable.lb_card_outline));
-                }
+            if (VERSION.SDK_INT >= 23) {
+                imageWrapper.setForeground(ContextCompat.getDrawable(context, R.drawable.yt_poster_outline));
             }
-        }
-
-        TextView titleText = cardView.findViewById(R.id.title_text);
-        if (titleText != null) {
-            titleText.setEllipsize(TextUtils.TruncateAt.END);
-            titleText.setTextSize(15f);
-            titleText.setIncludeFontPadding(false);
-        }
-
-        TextView contentText = cardView.findViewById(R.id.content_text);
-        if (contentText != null) {
-            contentText.setEllipsize(TextUtils.TruncateAt.END);
-            contentText.setTextSize(12f);
-            contentText.setIncludeFontPadding(false);
         }
 
         updateCardBackgroundColor(cardView, false);
@@ -131,23 +98,33 @@ public class VideoCardPresenter extends LongClickPresenter {
     }
 
     private void updateCardBackgroundColor(ComplexImageCardView view, boolean selected) {
-        int backgroundColor = selected ? mSelectedBackgroundColor : mDefaultBackgroundColor;
-        int titleColor = selected ? mSelectedTextColor : mDefaultTextColor;
-        int contentColor = selected ? Color.parseColor("#555555") : Color.parseColor("#AAAAAA");
+        view.setBackgroundColor(Color.TRANSPARENT);
 
         View infoField = view.findViewById(R.id.info_field);
         if (infoField != null) {
-            infoField.setBackgroundColor(backgroundColor);
-            infoField.setPadding(10, 8, 10, 8);
+            infoField.setBackgroundColor(Color.TRANSPARENT);
+            infoField.setPadding(2, 10, 2, 4);
+        }
+
+        View imageWrapper = view.findViewById(R.id.main_image_wrapper);
+        if (imageWrapper != null) {
+            imageWrapper.setSelected(selected);
         }
 
         TextView titleText = view.findViewById(R.id.title_text);
         if (titleText != null) {
-            titleText.setTextColor(titleColor);
+            titleText.setTextColor(selected ? Color.parseColor("#FFFFFF") : Color.parseColor("#F1F1F1"));
+            titleText.setTextSize(14f);
+            titleText.setMaxLines(2);
+            titleText.setEllipsize(TextUtils.TruncateAt.END);
         }
+
         TextView contentText = view.findViewById(R.id.content_text);
         if (contentText != null) {
-            contentText.setTextColor(contentColor);
+            contentText.setTextColor(Color.parseColor("#AAAAAA"));
+            contentText.setTextSize(12f);
+            contentText.setMaxLines(2);
+            contentText.setEllipsize(TextUtils.TruncateAt.END);
         }
     }
 
@@ -162,7 +139,6 @@ public class VideoCardPresenter extends LongClickPresenter {
 
         cardView.setTitleText(video.getTitle());
         cardView.setContentText(video.getSecondTitle());
-        // Count progress that very close to zero. E.g. when user closed video immediately.
         cardView.setProgress(video.percentWatched > 0 && video.percentWatched < 1 ? 1 : Math.round(video.percentWatched));
         cardView.setBadgeText(
                 video.hasNewContent ? context.getString(R.string.badge_new_content) :
@@ -181,7 +157,6 @@ public class VideoCardPresenter extends LongClickPresenter {
         cardView.setMainImageDimensions(mWidth, mHeight);
 
         if (context instanceof Activity && ((Activity) context).isDestroyed()) {
-            // Glide.with(context): IllegalArgumentException: You cannot start a load for a destroyed activity
             return;
         }
 
@@ -207,7 +182,6 @@ public class VideoCardPresenter extends LongClickPresenter {
 
         ComplexImageCardView cardView = (ComplexImageCardView) viewHolder.view;
 
-        // Remove references to images so that the garbage collector can free up memory.
         cardView.setBadgeImage(null);
         cardView.setMainImage(null);
 
@@ -286,4 +260,4 @@ public class VideoCardPresenter extends LongClickPresenter {
             return false;
         }
     };
-            }
+}
