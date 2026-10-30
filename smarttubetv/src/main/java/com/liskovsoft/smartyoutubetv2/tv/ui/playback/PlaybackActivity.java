@@ -57,8 +57,8 @@ public class PlaybackActivity extends LeanbackActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (mPlaybackFragment != null) {
-            mPlaybackFragment.onDispatchKeyEvent(event);
+        if (mPlaybackFragment != null && mPlaybackFragment.onDispatchKeyEvent(event)) {
+            return true; // Consumed by Shorts UI: don't let Leanback handle it again
         }
 
         return super.dispatchKeyEvent(event);
@@ -327,4 +327,4 @@ public class PlaybackActivity extends LeanbackActivity {
     //    return getGeneralData().getBackgroundPlaybackShortcut() == GeneralData.BACKGROUND_PLAYBACK_SHORTCUT_BACK ||
     //            getGeneralData().getBackgroundPlaybackShortcut() == GeneralData.BACKGROUND_PLAYBACK_SHORTCUT_HOME_BACK;
     //}
-}
+    }
