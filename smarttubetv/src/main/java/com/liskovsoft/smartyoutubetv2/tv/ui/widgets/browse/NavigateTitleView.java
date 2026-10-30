@@ -1,3 +1,4 @@
+// File Path: smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/ui/widgets/browse/NavigateTitleView.java
 package com.liskovsoft.smartyoutubetv2.tv.ui.widgets.browse;
 
 import android.app.Activity;
@@ -51,12 +52,13 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
     private SearchOrbView mLanguageView;
     private SearchOrbView mExitPip;
     private TextView mPipTitle;
-    private TextView mSearchPillBar;
     private int mSearchVisibility = View.INVISIBLE;
     private int mBrandingVisibility = View.INVISIBLE;
     private DateTimeView mGlobalClock;
     private DateTimeView mGlobalDate;
     private SearchOrbView mSearchOrbView;
+    private View mPillSearchBar;
+    private TextView mPillSearchText;
     private boolean mInitDone;
     private int mFlags = FULL_VIEW_VISIBLE;
     private int mIconWidth;
@@ -111,7 +113,7 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
 
     @Override
     protected boolean onRequestFocusInDescendants(int direction, Rect previouslyFocusedRect) {
-        if (mSearchPillBar != null && mSearchPillBar.getVisibility() == View.VISIBLE && mSearchPillBar.requestFocus()) {
+        if (mPillSearchBar != null && mPillSearchBar.getVisibility() == View.VISIBLE && mPillSearchBar.requestFocus()) {
             return true;
         }
         return getSearchAffordanceView().requestFocus() || super.onRequestFocusInDescendants(direction, previouslyFocusedRect);
@@ -135,15 +137,12 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         mBrandingVisibility = (flags & BRANDING_VIEW_VISIBLE) == BRANDING_VIEW_VISIBLE
                 ? View.VISIBLE : View.INVISIBLE;
 
-        if (mIsSearchOrbEnabled) {
+        if (mSearchOrbView != null) {
             mSearchOrbView.setVisibility(View.GONE);
-            if (mSearchPillBar != null) {
-                mSearchPillBar.setVisibility(View.GONE);
-            }
-        } else {
-            if (mSearchPillBar != null) {
-                mSearchPillBar.setVisibility(mSearchVisibility);
-            }
+        }
+
+        if (mPillSearchBar != null) {
+            mPillSearchBar.setVisibility(mIsSearchOrbEnabled ? View.GONE : mSearchVisibility);
         }
 
         if (mIsAccountViewEnabled) {
@@ -161,6 +160,9 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
 
         if (mIsGlobalClockEnabled) {
             mGlobalClock.setVisibility(mBrandingVisibility);
+        }
+
+        if (mIsGlobalClockEnabled) {
             mGlobalDate.setVisibility(mBrandingVisibility);
         }
     }
@@ -184,13 +186,16 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         MainUIData mainUIData = MainUIData.instance(getContext());
 
         mSearchOrbView = findViewById(R.id.title_orb);
-        mSearchPillBar = findViewById(R.id.yt_search_pill_bar);
+        mPillSearchBar = findViewById(R.id.yt_pill_search_bar);
+        mPillSearchText = findViewById(R.id.yt_pill_search_text);
 
-        if (mSearchPillBar != null) {
-            mSearchPillBar.setOnClickListener(v -> SearchPresenter.instance(getContext()).startSearch(null));
-            mSearchPillBar.setOnFocusChangeListener((v, hasFocus) ->
-                    mSearchPillBar.setTextColor(hasFocus ? Color.parseColor("#0F0F0F") : Color.parseColor("#EBEBEB"))
-            );
+        if (mPillSearchBar != null) {
+            mPillSearchBar.setOnClickListener(v -> SearchPresenter.instance(getContext()).startSearch(null));
+            mPillSearchBar.setOnFocusChangeListener((v, hasFocus) -> {
+                if (mPillSearchText != null) {
+                    mPillSearchText.setTextColor(hasFocus ? Color.parseColor("#0F0F0F") : Color.parseColor("#CCCCCC"));
+                }
+            });
         }
 
         mAccountView = findViewById(R.id.account_orb);
@@ -230,9 +235,11 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         mIsLanguageViewEnabled = mainUIData.isTopButtonEnabled(MainUIData.TOP_BUTTON_CHANGE_LANGUAGE);
         mIsGlobalClockEnabled = GeneralData.instance(getContext()).isGlobalClockEnabled();
 
-        mSearchOrbView.setVisibility(mIsSearchOrbEnabled ? View.GONE : View.VISIBLE);
-        if (mSearchPillBar != null) {
-            mSearchPillBar.setVisibility(mIsSearchOrbEnabled ? View.GONE : View.VISIBLE);
+        if (mSearchOrbView != null) {
+            mSearchOrbView.setVisibility(View.GONE);
+        }
+        if (mPillSearchBar != null) {
+            mPillSearchBar.setVisibility(mIsSearchOrbEnabled ? View.GONE : View.VISIBLE);
         }
         mAccountView.setVisibility(mIsAccountViewEnabled ? View.VISIBLE : View.GONE);
         mLanguageView.setVisibility(mIsLanguageViewEnabled ? View.VISIBLE : View.GONE);
@@ -363,4 +370,4 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
             e.printStackTrace();
         }
     }
-}
+    }
