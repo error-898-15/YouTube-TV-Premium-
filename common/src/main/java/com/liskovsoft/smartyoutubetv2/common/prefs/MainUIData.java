@@ -1,3 +1,4 @@
+// File Path: common/src/main/java/com/liskovsoft/smartyoutubetv2/common/prefs/MainUIData.java
 package com.liskovsoft.smartyoutubetv2.common.prefs;
 
 import android.annotation.SuppressLint;
@@ -89,7 +90,7 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
             MENU_ITEM_SHARE_EMBED_LINK, MENU_ITEM_SHARE_QR_LINK, MENU_ITEM_SELECT_ACCOUNT, MENU_ITEM_TOGGLE_HISTORY, MENU_ITEM_CLEAR_HISTORY,
             MENU_ITEM_MOVE_SECTION_UP, MENU_ITEM_MOVE_SECTION_DOWN, MENU_ITEM_RENAME_SECTION, MENU_ITEM_UPDATE_CHECK
     };
-    public static final long UI_TWEAK_DEFAULT = UI_TWEAK_ROUNDED_CORNERS;
+    public static final long UI_TWEAK_DEFAULT = 0;
     @SuppressLint("StaticFieldLeak")
     private static MainUIData sInstance;
     private final Context mContext;
@@ -181,7 +182,6 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
     }
 
     public float getVideoGridScale() {
-        // Fixing the bug with chaotic cards positioning on Android 4.4 devices.
         return Build.VERSION.SDK_INT <= 19 ? 1.2f : mVideoGridScale;
     }
 
@@ -312,9 +312,6 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
     }
 
     public void setMenuItemIndex(int index, Long menuItem) {
-        //int currentIndex = getMenuItemIndex(menuItem);
-        //index = currentIndex < index ? index - 1 : index;
-
         mMenuItemsOrdered.remove(menuItem);
 
         if (index <= mMenuItemsOrdered.size()) {
@@ -428,16 +425,14 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
 
         String[] split = Helpers.splitData(data);
 
-        // === NEW CHANGE CODE: Default Clean YouTube TV UI Settings ===
-        //mIsCardAnimatedPreviewsEnabled = Helpers.parseBoolean(split, 0, true);
-        mVideoGridScale = Helpers.parseFloat(split, 1, 1.15f); // Wide YouTube TV Poster Size
+        mVideoGridScale = Helpers.parseFloat(split, 1, 1.0f);
         mUIScale = Helpers.parseFloat(split, 2, 1.0f);
         mColorSchemeIndex = Helpers.parseInt(split, 3, 1);
         mIsCardMultilineTitleEnabled = Helpers.parseBoolean(split, 4, true);
         mChannelCategorySorting = Helpers.parseInt(split, 5, CHANNEL_SORTING_LAST_VIEWED);
         mPlaylistsStyle = Helpers.parseInt(split, 6, PLAYLISTS_STYLE_GRID);
-        mCardTitleLinesNum = Helpers.parseInt(split, 7, 2); // Clean 2-line bottom title
-        mIsCardTextAutoScrollEnabled = Helpers.parseBoolean(split, 8, false); // Prevent faulty scrolling text
+        mCardTitleLinesNum = Helpers.parseInt(split, 7, 2);
+        mIsCardTextAutoScrollEnabled = Helpers.parseBoolean(split, 8, false);
         mIsUploadsOldLookEnabled = Helpers.parseBoolean(split, 9, false);
         mIsUploadsAutoLoadEnabled = Helpers.parseBoolean(split, 10, true);
         mCardTextScrollSpeed = Helpers.parseFloat(split, 11, 2);
@@ -453,6 +448,7 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
         mCardPreviewType = Helpers.parseInt(split, 21, CARD_PREVIEW_DISABLED);
         mIsUnlocalizedTitlesEnabled = Helpers.parseBoolean(split, 22, false);
         mUiTweaks = Helpers.parseLong(split, 23, UI_TWEAK_DEFAULT);
+        mUiTweaks &= ~UI_TWEAK_ROUNDED_CORNERS;
 
         int idx = -1;
         for (Long menuItem : MENU_ITEM_DEFAULT_ORDER) {
@@ -522,10 +518,9 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
     }
 
     private void updateDefaultValues() {
-        // Enable only certain items (not all, like it was)
-        if (mMenuItems >>> 30 == 0b1) { // check leftmost bit (old format)
+        if (mMenuItems >>> 30 == 0b1) {
             int bits = 32 - 27;
-            mMenuItems = mMenuItems << bits >>> bits; // remove auto enabled bits
+            mMenuItems = mMenuItems << bits >>> bits;
         }
 
         if (mChannelCategorySorting == CHANNEL_SORTING_NAME2) {
