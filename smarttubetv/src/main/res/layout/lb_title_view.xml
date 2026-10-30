@@ -11,36 +11,34 @@
         android:gravity="center_vertical"
         android:layout_gravity="center_vertical|start">
 
-        <!-- Original SearchOrbView required by Leanback TitleView -->
         <androidx.leanback.widget.SearchOrbView
             android:id="@+id/title_orb"
-            android:layout_height="wrap_content"
-            android:layout_width="wrap_content"
-            android:transitionGroup="true"
-            android:layout_gravity="center_vertical|start"
-            android:nextFocusRight="@id/yt_search_pill_bar"
-            android:visibility="invisible" />
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
 
-        <!-- New YouTube TV Pill-Shaped Search Bar (Same as Image 5) -->
-        <TextView
-            android:id="@+id/yt_search_pill_bar"
-            android:layout_width="340dp"
+        <LinearLayout
+            android:id="@+id/yt_pill_search_bar"
+            android:layout_width="420dp"
             android:layout_height="42dp"
-            android:layout_marginStart="12dp"
             android:background="@drawable/yt_search_pill_bg"
             android:gravity="center_vertical"
+            android:orientation="horizontal"
             android:paddingStart="20dp"
             android:paddingEnd="20dp"
-            android:text="@string/lb_search_bar_hint"
-            android:textColor="#EBEBEB"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:singleLine="true"
             android:focusable="true"
-            android:focusableInTouchMode="false"
-            android:nextFocusLeft="@id/title_orb"
-            android:nextFocusRight="@id/account_orb"
-            android:visibility="gone" />
+            android:focusableInTouchMode="true"
+            android:nextFocusRight="@id/account_orb">
+
+            <TextView
+                android:id="@+id/yt_pill_search_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Search"
+                android:textColor="#CCCCCC"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <com.liskovsoft.smartyoutubetv2.tv.ui.widgets.search.LongClickSearchOrbView
             android:id="@+id/account_orb"
@@ -48,7 +46,7 @@
             android:layout_height="wrap_content"
             android:transitionGroup="true"
             android:layout_marginStart="@dimen/search_bar_right_items_margin"
-            android:nextFocusLeft="@id/yt_search_pill_bar"
+            android:nextFocusLeft="@id/yt_pill_search_bar"
             android:nextFocusRight="@id/language_orb"
             app:searchOrbIcon="@drawable/browse_title_account"
             app:searchOrbColor="@color/orb_color"
