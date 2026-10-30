@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/shorts_overlay_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:visibility="gone">
+
+    <!-- মূল কন্টেইনার: বাম-মাঝখানে ফুল-হাইট ভিডিও ফ্রেম এবং ডানপাশে নিচে অপশন প্যানেল -->
+    <LinearLayout
+        android:id="@+id/shorts_content_row"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_horizontal"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:gravity="bottom"
+        android:orientation="horizontal"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp">
+
+        <!-- বাম পাশের 9:16 ফুল-হাইট শর্ট ভিডিও প্লেসহোল্ডার (PlayerView এর অবস্থান নির্ধারণের জন্য) -->
+        <FrameLayout
+            android:id="@+id/shorts_video_bounds"
+            android:layout_width="295dp"
+            android:layout_height="match_parent"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusRight="@+id/btn_shorts_like"
+            android:nextFocusDown="@+id/btn_shorts_like" />
+
+        <!-- ডান পাশের অপশন ও ইনফো প্যানেল (ছবির মতো একদম নিচে অ্যালাইন করা) -->
+        <LinearLayout
+            android:id="@+id/shorts_right_panel"
+            android:layout_width="320dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="24dp"
+            android:layout_marginBottom="14dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:gravity="bottom|start"
+            android:orientation="vertical">
+
+            <!-- ১. শর্টস টাইটেল -->
+            <TextView
+                android:id="@+id/shorts_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:lineSpacingExtra="2dp"
+                android:maxLines="3"
+                android:text="Short Video Title"
+                android:textColor="#FFFFFF"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <!-- ২. সাবটাইটেল / ভিউ ও অডিও ইনফো লাইন -->
+            <TextView
+                android:id="@+id/shorts_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="▶  Channel • Views"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp" />
+
+            <!-- ৩. চ্যানেল আইকন ও @Handle -->
+            <LinearLayout
+                android:id="@+id/shorts_channel_container"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginTop="12dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:gravity="center_vertical"
+                android:nextFocusDown="@+id/btn_shorts_subscribe"
+                android:nextFocusLeft="@+id/shorts_video_bounds"
+                android:nextFocusRight="@+id/btn_shorts_subscribe"
+                android:orientation="horizontal"
+                android:paddingStart="6dp"
+                android:paddingEnd="12dp">
+
+                <ImageView
+                    android:id="@+id/shorts_channel_avatar"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:scaleType="centerCrop" />
+
+                <TextView
+                    android:id="@+id/shorts_channel_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:ellipsize="end"
+                    android:maxWidth="240dp"
+                    android:singleLine="true"
+                    android:text="@Channel"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- ৪. + Subscribe বাটন (ফোকাস ও কার্সর নেভিগেশনসহ) -->
+            <TextView
+                android:id="@+id/btn_shorts_subscribe"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginTop="12dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:gravity="center"
+                android:nextFocusUp="@+id/shorts_channel_container"
+                android:nextFocusDown="@+id/btn_shorts_like"
+                android:nextFocusLeft="@+id/shorts_video_bounds"
+                android:nextFocusRight="@+id/btn_shorts_like"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:singleLine="true"
+                android:text="+  Subscribe"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <!-- ৫. নিচের ৪টি গোল অ্যাকশন বাটন (Like, Comment, Loop, More) -->
+            <LinearLayout
+                android:id="@+id/shorts_actions_row"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <!-- Like Button -->
+                <TextView
+                    android:id="@+id/btn_shorts_like"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginEnd="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:gravity="center"
+                    android:nextFocusUp="@+id/btn_shorts_subscribe"
+                    android:nextFocusLeft="@+id/btn_shorts_subscribe"
+                    android:nextFocusRight="@+id/btn_shorts_comment"
+                    android:text="♡"
+                    android:textColor="#FFFFFF"
+                    android:textSize="19sp" />
+
+                <!-- Comment Button -->
+                <TextView
+                    android:id="@+id/btn_shorts_comment"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginEnd="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:gravity="center"
+                    android:nextFocusUp="@+id/btn_shorts_subscribe"
+                    android:nextFocusLeft="@+id/btn_shorts_like"
+                    android:nextFocusRight="@+id/btn_shorts_loop"
+                    android:text="💬"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp" />
+
+                <!-- Loop / Repeat Button -->
+                <TextView
+                    android:id="@+id/btn_shorts_loop"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginEnd="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:gravity="center"
+                    android:nextFocusUp="@+id/btn_shorts_subscribe"
+                    android:nextFocusLeft="@+id/btn_shorts_comment"
+                    android:nextFocusRight="@+id/btn_shorts_more"
+                    android:text="🔁"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp" />
+
+                <!-- More Options (3 Dots) Button -->
+                <TextView
+                    android:id="@+id/btn_shorts_more"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:gravity="center"
+                    android:nextFocusUp="@+id/btn_shorts_subscribe"
+                    android:nextFocusLeft="@+id/btn_shorts_loop"
+                    android:text="⋮"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>
