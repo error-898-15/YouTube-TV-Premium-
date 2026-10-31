@@ -1,4 +1,3 @@
-// File Path: smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/presenter/IconHeaderItemPresenter.java
 package com.liskovsoft.smartyoutubetv2.tv.presenter;
 
 import android.content.Context;
@@ -28,7 +27,7 @@ import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
 public class IconHeaderItemPresenter extends RowHeaderPresenter {
     private static final String TAG = IconHeaderItemPresenter.class.getSimpleName();
-    private float mUnselectedAlpha = 0.55f;
+    private float mUnselectedAlpha;
     private final int mResId;
     private final String mIconUrl;
     private Drawable mDefaultIcon;
@@ -40,12 +39,14 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup viewGroup) {
+        mUnselectedAlpha = viewGroup.getResources()
+                .getFraction(R.fraction.lb_browse_header_unselect_alpha, 1, 1);
         LayoutInflater inflater = (LayoutInflater) viewGroup.getContext()
                 .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         mDefaultIcon = new ColorDrawable(ContextCompat.getColor(viewGroup.getContext(), R.color.lb_grey));
 
-        View view = inflater.inflate(R.layout.icon_header_item, viewGroup, false);
-        view.setAlpha(mUnselectedAlpha);
+        View view = inflater.inflate(R.layout.icon_header_item, null);
+        view.setAlpha(mUnselectedAlpha); // Initialize icons to be at half-opacity.
 
         return new ViewHolder(view);
     }
@@ -73,6 +74,8 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
                         .apply(ViewUtil.glideOptions().error(mDefaultIcon))
                         .listener(mErrorListener)
                         .into(iconView);
+
+                //ViewUtil.makeMonochrome(iconView);
             } else {
                 Drawable icon = mResId > 0 ? ContextCompat.getDrawable(rootView.getContext(), mResId) : mDefaultIcon;
                 iconView.setImageDrawable(icon);
@@ -84,7 +87,6 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
         TextView label = rootView.findViewById(R.id.header_label);
         if (label != null) {
             label.setText(headerItem.getName());
-            label.setVisibility(View.GONE);
         }
     }
 
@@ -93,10 +95,12 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
         // NOP
     }
 
+    // TODO: This is a temporary fix. Remove me when leanback onCreateViewHolder no longer sets the
+    // mUnselectAlpha, and also assumes the xml inflation will return a RowHeaderView.
     @Override
     protected void onSelectLevelChanged(RowHeaderPresenter.ViewHolder holder) {
-        float alpha = mUnselectedAlpha + holder.getSelectLevel() * (1.0f - mUnselectedAlpha);
-        holder.view.setAlpha(alpha);
+        holder.view.setAlpha(mUnselectedAlpha + holder.getSelectLevel() *
+                (1.0f - mUnselectedAlpha));
     }
 
     private final RequestListener<Drawable> mErrorListener = new RequestListener<Drawable>() {
