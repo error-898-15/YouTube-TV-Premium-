@@ -44,6 +44,7 @@ public class SuggestionsController extends BasePlayerController {
     private ContentService mContentService;
     private BrowseProcessorManager mBrowseProcessor;
     private Video mNextSectionVideo;
+    private ShortsFeed mShortsFeed;
     private int mFocusCount;
     private int mNextRetryCount;
     private List<ChapterItem> mChapters;
@@ -64,6 +65,7 @@ public class SuggestionsController extends BasePlayerController {
         mBrowseProcessor = new BrowseProcessorManager(getContext(), PlaybackPresenter.instance(getContext())::syncItem);
         mMediaItemService = YouTubeServiceManager.instance().getMediaItemService();
         mContentService = YouTubeServiceManager.instance().getContentService();
+        mShortsFeed = new ShortsFeed(mContentService);
     }
 
     @Override
@@ -71,6 +73,11 @@ public class SuggestionsController extends BasePlayerController {
         // Remote control fix. Slow network fix. Suggestions may still be loading.
         // This could lead to changing current video info (title, id etc) to wrong one.
         disposeActions();
+        // Shorts: the played Short must never be offered again, and the next ones should be loaded ahead of time
+        if (mShortsFeed != null && isShortsMode(video)) {
+            mShortsFeed.markSeen(video);
+            mShortsFeed.ensureLoaded(null);
+        }
         //mCurrentGroup = video.getGroup(); // disable garbage collected
         //appendNextSectionVideoIfNeeded(video); // ConcurrentModificationException error
     }
@@ -97,6 +104,9 @@ public class SuggestionsController extends BasePlayerController {
     @Override
     public void onFinish() {
         disposeActions();
+        if (mShortsFeed != null) {
+            mShortsFeed.reset();
+        }
     }
 
     @Override
@@ -283,6 +293,15 @@ public class SuggestionsController extends BasePlayerController {
         if (next != null) {
             next.fromQueue = true;
             result = next;
+        } else if (isShortsMode(getVideo())) {
+            // Shorts: take the next Short from the recommended Shorts feed (mixed channels),
+            // not from the channel/playlist the current Short was opened from.
+            result = mShortsFeed != null ? mShortsFeed.peekNext() : null;
+
+            // Feed is unavailable (e.g. no network) -> fall back to the old behavior
+            if (result == null && (mShortsFeed == null || mShortsFeed.isLoadFailed()) && getVideo().nextMediaItem != null) {
+                result = Video.from(getVideo().nextMediaItem);
+            }
         } else if (!getVideo().isShuffled &&
                 Helpers.startsWith(getVideo().getPlaylistId(), "RD") &&
                 getVideo().hasNextPlaylist()) {
@@ -301,7 +320,21 @@ public class SuggestionsController extends BasePlayerController {
             return null;
         }
 
-        Video result = getPreviousFromGroup(getVideo());
+        Video result = null;
+
+        // Shorts: "previous" is the Short we have just watched (history), not the previous item of the channel list
+        if (isShortsMode(getVideo())) {
+            Video previous = Playlist.instance().getPrevious();
+
+            if (previous != null && previous.isShorts) {
+                previous.fromQueue = true;
+                result = previous;
+            }
+        }
+
+        if (result == null) {
+            result = getPreviousFromGroup(getVideo());
+        }
 
         if (result == null) {
             Video previous = Playlist.instance().getPrevious();
@@ -313,6 +346,28 @@ public class SuggestionsController extends BasePlayerController {
         }
 
         return result;
+    }
+
+    /**
+     * @return true if the video is a Short (Shorts player UI + endless Shorts feed)
+     */
+    public boolean isShortsMode(Video video) {
+        return video != null && (video.isShorts || video.belongsToShortsGroup());
+    }
+
+    /**
+     * Makes sure the Shorts feed has the next Short. The callback is called when the next Short is
+     * known (or when the load has failed).
+     */
+    public void loadShortsFeed(Runnable onReady) {
+        if (mShortsFeed == null) {
+            if (onReady != null) {
+                onReady.run();
+            }
+            return;
+        }
+
+        mShortsFeed.ensureLoaded(onReady);
     }
 
     private Video getPreviousFromGroup(Video current) {
@@ -880,4 +935,4 @@ public class SuggestionsController extends BasePlayerController {
 
         mActions.add(dislikeAction);
     }
-}
+    }
