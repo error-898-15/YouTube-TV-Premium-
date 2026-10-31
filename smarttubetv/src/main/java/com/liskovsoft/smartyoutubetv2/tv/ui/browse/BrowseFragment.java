@@ -16,12 +16,16 @@ import androidx.leanback.app.BrowseSupportFragment;
 import androidx.leanback.app.HeadersSupportFragment;
 import androidx.leanback.widget.ArrayObjectAdapter;
 import androidx.leanback.widget.HeaderItem;
+import androidx.leanback.widget.ItemBridgeAdapter;
+import androidx.leanback.widget.VerticalGridView;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.leanback.widget.ListRowPresenter;
 import androidx.leanback.widget.PageRow;
 import androidx.leanback.widget.Presenter;
 import androidx.leanback.widget.PresenterSelector;
 import androidx.leanback.widget.TitleHelper;
 import com.liskovsoft.sharedutils.helpers.Helpers;
+import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.BrowseSection;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.SettingsGroup;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
@@ -123,6 +127,19 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     }
 
     private void setupEventListeners() {
+        // Mini rail: hide labels when sidebar is collapsed, show them when expanded
+        setBrowseTransitionListener(new BrowseSupportFragment.BrowseTransitionListener() {
+            @Override
+            public void onHeadersTransitionStart(boolean withHeaders) {
+                applyRailState(withHeaders);
+            }
+
+            @Override
+            public void onHeadersTransitionStop(boolean withHeaders) {
+                applyRailState(withHeaders);
+            }
+        });
+
         getHeadersSupportFragment().setOnHeaderClickedListener(
                 (viewHolder, row) -> {
                     long headerId = row.getHeaderItem().getId();
@@ -210,7 +227,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 Presenter presenter = mPresenterMap.get(o.hashCode());
 
                 if (presenter == null) {
-                    presenter = new IconHeaderItemPresenter(getHeaderResId(o), getIconUrl(o));
+                    presenter = new IconHeaderItemPresenter(getHeaderResId(o), getIconUrl(o), BrowseFragment.this::getDividerMode);
                     mPresenterMap.put(o.hashCode(), presenter);
                 }
 
@@ -233,6 +250,104 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 return null;
             }
         });
+    }
+
+    // ---- YouTube TV style sidebar groups (divider logic) ----
+    private static final int GROUP_MAIN = 0;     // Home, Shorts...
+    private static final int GROUP_LIBRARY = 1;  // pinned channels, Subscriptions, History, Playlists...
+    private static final int GROUP_EXPLORE = 2;  // Music, Gaming, Sports, News, Live...
+    private static final int GROUP_SETTINGS = 3; // Settings
+
+    private int getSectionGroup(Object o) {
+        if (!(o instanceof PageRow) || !(((PageRow) o).getHeaderItem() instanceof SectionHeaderItem)) {
+            return GROUP_MAIN;
+        }
+
+        SectionHeaderItem header = (SectionHeaderItem) ((PageRow) o).getHeaderItem();
+
+        if (header.getIconUrl() != null) { // pinned channel (avatar)
+            return GROUP_LIBRARY;
+        }
+
+        int id = (int) header.getId();
+
+        if (id == MediaGroup.TYPE_HOME || id == MediaGroup.TYPE_SHORTS || id == MediaGroup.TYPE_NOTIFICATIONS) {
+            return GROUP_MAIN;
+        }
+
+        if (id == MediaGroup.TYPE_SETTINGS) {
+            return GROUP_SETTINGS;
+        }
+
+        if (id == MediaGroup.TYPE_MUSIC || id == MediaGroup.TYPE_GAMING || id == MediaGroup.TYPE_SPORTS ||
+                id == MediaGroup.TYPE_NEWS || id == MediaGroup.TYPE_LIVE || id == MediaGroup.TYPE_TRENDING ||
+                id == MediaGroup.TYPE_KIDS_HOME) {
+            return GROUP_EXPLORE;
+        }
+
+        return GROUP_LIBRARY;
+    }
+
+    private int getDividerMode(Object item) {
+        if (mSectionRowAdapter == null) {
+            return IconHeaderItemPresenter.DIVIDER_NONE;
+        }
+
+        int index = mSectionRowAdapter.indexOf(item);
+
+        if (index <= 0) {
+            return IconHeaderItemPresenter.DIVIDER_NONE;
+        }
+
+        int current = getSectionGroup(item);
+        int previous = getSectionGroup(mSectionRowAdapter.get(index - 1));
+
+        if (current == previous) {
+            return IconHeaderItemPresenter.DIVIDER_NONE;
+        }
+
+        return current == GROUP_SETTINGS ? IconHeaderItemPresenter.DIVIDER_GAP : IconHeaderItemPresenter.DIVIDER_LINE;
+    }
+
+    private void refreshHeaderDividers() {
+        if (mSectionRowAdapter != null && mSectionRowAdapter.size() > 0) {
+            mSectionRowAdapter.notifyArrayItemRangeChanged(0, mSectionRowAdapter.size());
+        }
+
+        // New/rebound headers must follow the current rail state
+        mHandler.post(() -> applyRailState(isShowingHeaders()));
+    }
+
+    /**
+     * Collapsed sidebar = icon rail (labels hidden, only current section is bright).
+     */
+    private void applyRailState(boolean expanded) {
+        HeadersSupportFragment headers = getHeadersSupportFragment();
+
+        if (headers == null || headers.getView() == null) {
+            return;
+        }
+
+        VerticalGridView grid = headers.getVerticalGridView();
+
+        if (grid == null) {
+            return;
+        }
+
+        int selected = headers.getSelectedPosition();
+
+        for (int i = 0; i < grid.getChildCount(); i++) {
+            RecyclerView.ViewHolder vh = grid.getChildViewHolder(grid.getChildAt(i));
+
+            if (vh instanceof ItemBridgeAdapter.ViewHolder) {
+                Presenter.ViewHolder presenterVh = ((ItemBridgeAdapter.ViewHolder) vh).getViewHolder();
+
+                if (presenterVh instanceof IconHeaderItemPresenter.HeaderViewHolder) {
+                    ((IconHeaderItemPresenter.HeaderViewHolder) presenterVh)
+                            .setRailMode(!expanded, vh.getAdapterPosition() == selected);
+                }
+            }
+        }
     }
 
     private int getSelectedHeaderId() {
@@ -417,6 +532,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         } else {
             mSectionRowAdapter.add(index, pageRow);
         }
+
+        refreshHeaderDividers();
     }
 
     private void removeHeader(BrowseSection header) {
@@ -431,6 +548,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         if (foundHeader != null) {
             mSectionRowAdapter.remove(foundHeader);
+            refreshHeaderDividers();
         }
     }
 
@@ -526,4 +644,4 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         // Top right corner logo
         setBadgeDrawable(bridgeIcon != null ? bridgeIcon : appLogoRes > 0 ? ContextCompat.getDrawable(getContext(), appLogoRes) : null);
     }
-}
+    }
