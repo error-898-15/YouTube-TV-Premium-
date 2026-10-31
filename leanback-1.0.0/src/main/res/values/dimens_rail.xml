@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NEW FILE. Width of the collapsed (icon only) sidebar rail. -->
+<resources>
+    <dimen name="lb_browse_collapsed_headers_width">72dp</dimen>
+</resources>
