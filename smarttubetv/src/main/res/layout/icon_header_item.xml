@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Works for both states:
+     - collapsed rail (72dp wide, clipped by parent): only the icon is visible, centered at x=36dp
+     - expanded sidebar: icon + label inside a rounded pill (white when focused) -->
 <androidx.leanback.widget.NonOverlappingLinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:minWidth="220dp"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
     android:orientation="vertical">
 
     <!-- Group divider. IconHeaderItemPresenter.bindDivider() toggles it:
@@ -17,15 +21,16 @@
         android:background="#33FFFFFF"
         android:visibility="gone" />
 
-    <!-- The pill. duplicateParentState => focused pill background still works,
-         because focus is on the root view (rootView.setFocusable(true)) -->
+    <!-- duplicateParentState => the focus (set on the root view) still draws the white pill -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="2dp"
         android:minHeight="44dp"
         android:gravity="center_vertical"
-        android:paddingStart="16dp"
+        android:paddingStart="11dp"
         android:paddingEnd="16dp"
         android:background="@drawable/header_pill_bg"
         android:duplicateParentState="true"
