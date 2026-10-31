@@ -186,11 +186,8 @@ public class HeadersSupportFragment extends BaseRowSupportFragment {
         if (listView != null) {
             getView().setVisibility(mHeadersGone ? View.GONE : View.VISIBLE);
             if (!mHeadersGone) {
-                if (mHeadersEnabled) {
-                    listView.setChildrenVisibility(View.VISIBLE);
-                } else {
-                    listView.setChildrenVisibility(View.INVISIBLE);
-                }
+                // MOD: mini rail. Keep header icons visible when sidebar is collapsed.
+                listView.setChildrenVisibility(View.VISIBLE);
             }
         }
     }
@@ -298,4 +295,4 @@ public class HeadersSupportFragment extends BaseRowSupportFragment {
         return getVerticalGridView().getScrollState()
                 != HorizontalGridView.SCROLL_STATE_IDLE;
     }
-}
+                               }
