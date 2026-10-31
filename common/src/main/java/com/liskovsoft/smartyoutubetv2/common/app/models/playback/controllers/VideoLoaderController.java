@@ -37,6 +37,12 @@ public class VideoLoaderController extends BasePlayerController {
     private SuggestionsController mSuggestionsController;
     private ErrorFixerController mErrorFixerController;
     private Disposable mFormatInfoAction;
+    private Disposable mPreloadAction;
+    // Format info of the next Short, loaded ahead of time (this makes the next Short start almost instantly)
+    private String mPreloadedVideoId;
+    private MediaItemFormatInfo mPreloadedFormatInfo;
+    private long mPreloadedTimeMs;
+    private static final long PRELOAD_TTL_MS = 5 * 60 * 1_000;
     private final Runnable mReloadVideo = () -> {
         getMainController().onNewVideo(getVideo());
     };
@@ -107,6 +113,7 @@ public class VideoLoaderController extends BasePlayerController {
     @Override
     public void onEngineReleased() {
         disposeActions();
+        RxHelper.disposeActions(mPreloadAction);
     }
 
     @Override
@@ -157,6 +164,8 @@ public class VideoLoaderController extends BasePlayerController {
 
         if (next != null) {
             openVideoInt(next);
+        } else if (mSuggestionsController.isShortsMode(getVideo())) {
+            loadNextShort();
         } else {
             waitMetadataSync(getVideo(), true);
         }
@@ -164,6 +173,35 @@ public class VideoLoaderController extends BasePlayerController {
         if (getPlayerTweaksData().isPlayerUiOnNextEnabled()) {
             getPlayer().showOverlay(true);
         }
+    }
+
+    /**
+     * The Shorts feed isn't ready yet: wait for it and then open the next Short.
+     */
+    private void loadNextShort() {
+        if (getPlayer() == null) {
+            return;
+        }
+
+        final Video current = getVideo();
+
+        getPlayer().showProgressBar(true);
+
+        mSuggestionsController.loadShortsFeed(() -> {
+            // The user has already opened another video while we were waiting
+            if (getPlayer() == null || getVideo() != current) {
+                return;
+            }
+
+            Video next = mSuggestionsController.getNext();
+
+            if (next != null) {
+                openVideoInt(next);
+            } else {
+                getPlayer().showProgressBar(false);
+                waitMetadataSync(current, true);
+            }
+        });
     }
 
     @Override
@@ -239,8 +277,22 @@ public class VideoLoaderController extends BasePlayerController {
             return;
         }
 
-        Utils.post(mShowProgressBar);
         disposeActions();
+
+        // The next Short was loaded ahead of time: no network request needed
+        final MediaItemFormatInfo preloaded = takePreloadedFormatInfo(video.videoId);
+        if (preloaded != null) {
+            Log.d(TAG, "Using preloaded format info for: " + video.videoId);
+            // Post: let all controllers finish onNewVideo first (same order as with the network response)
+            Utils.post(() -> {
+                if (getPlayer() != null && getVideo() != null && Helpers.equals(getVideo().videoId, video.videoId)) {
+                    processFormatInfo(preloaded);
+                }
+            });
+            return;
+        }
+
+        Utils.post(mShowProgressBar);
 
         ServiceManager service = YouTubeServiceManager.instance();
         MediaItemService mediaItemManager = service.getMediaItemService();
@@ -313,6 +365,11 @@ public class VideoLoaderController extends BasePlayerController {
         }
 
         player.showBackground(bgImageUrl);
+
+        // Shorts: start loading the next Short right now, so pressing DOWN opens it without waiting
+        if (!formatInfo.isUnplayable() && mSuggestionsController.isShortsMode(getVideo())) {
+            mSuggestionsController.loadShortsFeed(this::preloadNextVideoIfNeeded);
+        }
     }
 
     private void reloadVideo(int delayMs) {
@@ -571,13 +628,61 @@ public class VideoLoaderController extends BasePlayerController {
         }
     }
 
+    /**
+     * Shorts only. Loads format info of the next Short in the background and keeps it for a few minutes.
+     * ROOT CAUSE of the slow Shorts start: this method was never called, so every Short waited for the
+     * full network round trip after the key press.
+     */
     private void preloadNextVideoIfNeeded() {
         if (isEmbedPlayer() || getPlayer() == null || getVideo() == null || getVideo().isLive) {
             return;
         }
 
-        if (getPlayer().getDurationMs() - getPlayer().getPositionMs() < 50_000) {
-            MediaServiceManager.instance().loadFormatInfo(mSuggestionsController.getNext(), formatInfo -> {});
+        if (!mSuggestionsController.isShortsMode(getVideo())) {
+            return;
         }
+
+        Video next = mSuggestionsController.getNext();
+
+        if (next == null || next.videoId == null || next.isLive || next.isUpcoming || isPreloaded(next.videoId)) {
+            return;
+        }
+
+        RxHelper.disposeActions(mPreloadAction);
+
+        final String videoId = next.videoId;
+
+        mPreloadAction = YouTubeServiceManager.instance().getMediaItemService().getFormatInfoObserve(videoId)
+                .subscribe(
+                        formatInfo -> {
+                            if (formatInfo != null && !formatInfo.isUnplayable() && !formatInfo.isLive()) {
+                                mPreloadedVideoId = videoId;
+                                mPreloadedFormatInfo = formatInfo;
+                                mPreloadedTimeMs = System.currentTimeMillis();
+                                Log.d(TAG, "Preloaded format info for the next Short: " + videoId);
+                            }
+                        },
+                        error -> Log.e(TAG, "Preload error: %s", error.getMessage())
+                );
+    }
+
+    private boolean isPreloaded(String videoId) {
+        return mPreloadedFormatInfo != null && Helpers.equals(mPreloadedVideoId, videoId) &&
+                System.currentTimeMillis() - mPreloadedTimeMs < PRELOAD_TTL_MS;
+    }
+
+    /**
+     * One shot: the preloaded data is removed after the first use.
+     */
+    private MediaItemFormatInfo takePreloadedFormatInfo(String videoId) {
+        if (!isPreloaded(videoId)) {
+            return null;
+        }
+
+        MediaItemFormatInfo result = mPreloadedFormatInfo;
+        mPreloadedFormatInfo = null;
+        mPreloadedVideoId = null;
+
+        return result;
     }
     }
