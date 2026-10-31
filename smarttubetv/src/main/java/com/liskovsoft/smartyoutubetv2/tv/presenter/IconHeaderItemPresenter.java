@@ -63,6 +63,16 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
                 label.setAlpha(rail ? 0f : 1f);
             }
 
+            // Rail: short centered divider (icon width). Expanded: full width divider.
+            View divider = view.findViewById(R.id.header_divider);
+            if (divider != null) {
+                ViewGroup.LayoutParams lp = divider.getLayoutParams();
+                lp.width = rail
+                        ? (int) (48 * view.getResources().getDisplayMetrics().density)
+                        : ViewGroup.LayoutParams.MATCH_PARENT;
+                divider.setLayoutParams(lp);
+            }
+
             view.setAlpha(getRestAlpha());
         }
 
@@ -183,4 +193,4 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
             return false;
         }
     };
-            }
+    }
