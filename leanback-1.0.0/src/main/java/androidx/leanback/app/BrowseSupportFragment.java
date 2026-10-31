@@ -724,6 +724,7 @@ public class BrowseSupportFragment extends BaseSupportFragment {
     boolean mShowingHeaders = true;
     boolean mCanShowHeaders = true;
     private int mContainerListMarginStart;
+    private int mCollapsedHeadersWidth; // MOD: mini rail width
     private int mContainerListAlignTop;
     private boolean mMainFragmentScaleEnabled = true;
     OnItemViewSelectedListener mExternalOnItemViewSelectedListener;
@@ -1189,6 +1190,8 @@ public class BrowseSupportFragment extends BaseSupportFragment {
                 R.styleable.LeanbackTheme_browseRowsMarginTop, context.getResources()
                 .getDimensionPixelSize(R.dimen.lb_browse_rows_margin_top));
         ta.recycle();
+        // MOD: mini rail width (collapsed sidebar shows icons only)
+        mCollapsedHeadersWidth = context.getResources().getDimensionPixelSize(R.dimen.lb_browse_collapsed_headers_width);
 
         readArguments(getArguments());
 
@@ -1451,8 +1454,16 @@ public class BrowseSupportFragment extends BaseSupportFragment {
         View containerList;
         containerList = mHeadersSupportFragment.getView();
         lp = (MarginLayoutParams) containerList.getLayoutParams();
-        lp.setMarginStart(onScreen ? 0 : -mContainerListMarginStart);
+        // MOD: mini rail. Instead of moving the whole sidebar off screen,
+        // shrink it to icons only (children are clipped by the parent bounds).
+        lp.setMarginStart(0);
+        lp.width = onScreen ? ViewGroup.LayoutParams.WRAP_CONTENT : mCollapsedHeadersWidth;
         containerList.setLayoutParams(lp);
+
+        View fadeEdge = containerList.findViewById(R.id.fade_out_edge);
+        if (fadeEdge != null) {
+            fadeEdge.setVisibility(onScreen ? View.VISIBLE : View.INVISIBLE);
+        }
     }
 
     void showHeaders(boolean show) {
@@ -1464,7 +1475,8 @@ public class BrowseSupportFragment extends BaseSupportFragment {
 
     private void expandMainFragment(boolean expand) {
         MarginLayoutParams params = (MarginLayoutParams) mScaleFrameLayout.getLayoutParams();
-        params.setMarginStart(!expand ? mContainerListMarginStart : 0);
+        // MOD: mini rail. Content starts right after the icon rail when sidebar is collapsed.
+        params.setMarginStart(!expand ? mContainerListMarginStart : mCollapsedHeadersWidth);
         mScaleFrameLayout.setLayoutParams(params);
         mMainFragmentAdapter.setExpand(expand);
 
@@ -1894,4 +1906,4 @@ public class BrowseSupportFragment extends BaseSupportFragment {
             return false;
         }
     }
-}
+    }
