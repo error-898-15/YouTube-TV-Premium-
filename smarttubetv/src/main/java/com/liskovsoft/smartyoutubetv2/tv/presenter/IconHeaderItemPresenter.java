@@ -111,4 +111,4 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
             return false;
         }
     };
-        }
+    }
