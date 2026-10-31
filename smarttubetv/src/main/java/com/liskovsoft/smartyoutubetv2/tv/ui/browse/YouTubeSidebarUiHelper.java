@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -23,7 +24,6 @@ import androidx.leanback.widget.VerticalGridView;
 
 import com.bumptech.glide.Glide;
 import com.liskovsoft.mediaserviceinterfaces.oauth.Account;
-import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.SearchPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AccountSelectionPresenter;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
@@ -37,7 +37,7 @@ public class YouTubeSidebarUiHelper {
     private static final int CONTENT_MARGIN_TOP_DP = 76;
 
     private final BrowseFragment mFragment;
-    private final Context mContext;
+    private Context mContext;
     private View mHeadersDock;
     private View mContainerDock;
     private ImageView mAvatarView;
@@ -45,11 +45,10 @@ public class YouTubeSidebarUiHelper {
     private ImageView mSettingsBtn;
     private TextView mTopCategoryLabel;
     private TextView mTopSubHeaderLabel;
-    private boolean mSidebarExpanded = false;
 
     public YouTubeSidebarUiHelper(BrowseFragment fragment) {
         mFragment = fragment;
-        mContext = fragment.requireContext();
+        mContext = fragment.getContext();
     }
 
     public void attachToBrowseRoot(ViewGroup browseRoot) {
@@ -57,10 +56,11 @@ public class YouTubeSidebarUiHelper {
             return;
         }
 
+        mContext = browseRoot.getContext();
         browseRoot.setBackgroundColor(Color.parseColor("#0F0F0F"));
 
-        mHeadersDock = browseRoot.findViewById(androidx.leanback.R.id.browse_headers_dock);
-        mContainerDock = browseRoot.findViewById(androidx.leanback.R.id.browse_container_dock);
+        mHeadersDock = browseRoot.findViewById(R.id.browse_headers_dock);
+        mContainerDock = browseRoot.findViewById(R.id.browse_container_dock);
 
         hideDefaultTitleView(browseRoot);
         setupTopHeaderOverlay(browseRoot);
@@ -98,7 +98,9 @@ public class YouTubeSidebarUiHelper {
         mTopCategoryLabel.setTextColor(Color.parseColor("#AAAAAA"));
         mTopCategoryLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         mTopCategoryLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        mTopCategoryLabel.setLetterSpacing(0.08f);
+        if (Build.VERSION.SDK_INT >= 21) {
+            mTopCategoryLabel.setLetterSpacing(0.08f);
+        }
 
         mTopSubHeaderLabel = new TextView(mContext);
         mTopSubHeaderLabel.setText("Recommended");
@@ -143,7 +145,9 @@ public class YouTubeSidebarUiHelper {
         ytText.setTextColor(Color.WHITE);
         ytText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         ytText.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        ytText.setLetterSpacing(-0.03f);
+        if (Build.VERSION.SDK_INT >= 21) {
+            ytText.setLetterSpacing(-0.03f);
+        }
 
         brandBox.addView(redBadge);
         brandBox.addView(ytText);
@@ -167,7 +171,9 @@ public class YouTubeSidebarUiHelper {
                 dp(SIDEBAR_COLLAPSED_WIDTH_DP), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.START | Gravity.TOP);
         topRailLp.topMargin = dp(18);
         topRailOverlay.setLayoutParams(topRailLp);
-        topRailOverlay.setElevation(dp(12));
+        if (Build.VERSION.SDK_INT >= 21) {
+            topRailOverlay.setElevation(dp(12));
+        }
 
         mAvatarView = new ImageView(mContext);
         LinearLayout.LayoutParams avatarLp = new LinearLayout.LayoutParams(dp(36), dp(36));
@@ -176,9 +182,9 @@ public class YouTubeSidebarUiHelper {
         mAvatarView.setFocusable(true);
         mAvatarView.setClickable(true);
         mAvatarView.setPadding(dp(2), dp(2), dp(2), dp(2));
-        mAvatarView.setBackground(createCircleFocusDrawable());
+        mAvatarView.setBackground(ContextCompat.getDrawable(mContext, R.drawable.header_pill_bg));
         mAvatarView.setImageResource(R.drawable.browse_title_account);
-        mAvatarView.setOnClickListener(v -> AccountSelectionPresenter.instance(mContext).show(true));
+        mAvatarView.setOnClickListener(v -> AccountSelectionPresenter.instance(mContext).nextAccountOrDialog());
         topRailOverlay.addView(mAvatarView);
 
         mSearchBtn = new ImageView(mContext);
@@ -187,8 +193,8 @@ public class YouTubeSidebarUiHelper {
         mSearchBtn.setPadding(dp(9), dp(9), dp(9), dp(9));
         mSearchBtn.setFocusable(true);
         mSearchBtn.setClickable(true);
-        mSearchBtn.setBackground(createCircleFocusDrawable());
-        mSearchBtn.setImageResource(R.drawable. lb_ic_in_app_search);
+        mSearchBtn.setBackground(ContextCompat.getDrawable(mContext, R.drawable.header_pill_bg));
+        mSearchBtn.setImageResource(R.drawable.action_search);
         ImageViewCompat.setImageTintList(mSearchBtn,
                 ContextCompat.getColorStateList(mContext, R.color.header_content_color));
         mSearchBtn.setOnClickListener(v -> SearchPresenter.instance(mContext).startSearch(null));
@@ -202,7 +208,9 @@ public class YouTubeSidebarUiHelper {
                 dp(SIDEBAR_COLLAPSED_WIDTH_DP), dp(56), Gravity.START | Gravity.BOTTOM);
         bottomLp.bottomMargin = dp(14);
         bottomRailOverlay.setLayoutParams(bottomLp);
-        bottomRailOverlay.setElevation(dp(12));
+        if (Build.VERSION.SDK_INT >= 21) {
+            bottomRailOverlay.setElevation(dp(12));
+        }
 
         mSettingsBtn = new ImageView(mContext);
         FrameLayout.LayoutParams settingsLp = new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.CENTER);
@@ -210,8 +218,8 @@ public class YouTubeSidebarUiHelper {
         mSettingsBtn.setPadding(dp(9), dp(9), dp(9), dp(9));
         mSettingsBtn.setFocusable(true);
         mSettingsBtn.setClickable(true);
-        mSettingsBtn.setBackground(createCircleFocusDrawable());
-        mSettingsBtn.setImageResource(R.drawable.header_settings);
+        mSettingsBtn.setBackground(ContextCompat.getDrawable(mContext, R.drawable.header_pill_bg));
+        mSettingsBtn.setImageResource(R.drawable.icon_settings);
         ImageViewCompat.setImageTintList(mSettingsBtn,
                 ContextCompat.getColorStateList(mContext, R.color.header_content_color));
         mSettingsBtn.setOnClickListener(v -> mFragment.selectSettingsSection());
@@ -221,7 +229,10 @@ public class YouTubeSidebarUiHelper {
     }
 
     public void enforceSlimRailLayout(boolean expanded) {
-        mSidebarExpanded = expanded;
+        if (mContext == null) {
+            return;
+        }
+
         HeadersSupportFragment headersFragment = mFragment.getHeadersSupportFragment();
         if (headersFragment != null && headersFragment.getView() != null) {
             View headersRoot = headersFragment.getView();
@@ -236,7 +247,7 @@ public class YouTubeSidebarUiHelper {
                 headersRoot.setLayoutParams(mlp);
             }
 
-            View fadeEdge = headersRoot.findViewById(androidx.leanback.R.id.fade_out_edge);
+            View fadeEdge = headersRoot.findViewById(R.id.fade_out_edge);
             if (fadeEdge != null) {
                 fadeEdge.setVisibility(View.GONE);
             }
@@ -290,34 +301,22 @@ public class YouTubeSidebarUiHelper {
     }
 
     public void loadAccountAvatar() {
-        if (mAvatarView == null) {
+        if (mAvatarView == null || mContext == null) {
             return;
         }
-        MediaServiceManager.instance().loadAccounts(accounts -> {
-            if (accounts == null || accounts.isEmpty()) {
-                return;
-            }
-            for (Account account : accounts) {
-                if (account.isSelected() && account.getAvatarImageUrl() != null) {
-                    Glide.with(mContext)
-                            .load(account.getAvatarImageUrl())
-                            .apply(ViewUtil.glideOptions().circleCrop())
-                            .into(mAvatarView);
-                    break;
-                }
-            }
-        });
-    }
-
-    private GradientDrawable createCircleFocusDrawable() {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setShape(GradientDrawable.OVAL);
-        drawable.setColor(Color.TRANSPARENT);
-        return drawable;
+        Account current = MediaServiceManager.instance().getSelectedAccount();
+        if (current != null && current.getAvatarImageUrl() != null) {
+            Glide.with(mContext)
+                    .load(current.getAvatarImageUrl())
+                    .apply(ViewUtil.glideOptions().circleCrop())
+                    .into(mAvatarView);
+        } else {
+            mAvatarView.setImageResource(R.drawable.browse_title_account);
+        }
     }
 
     private int dp(int value) {
         return (int) TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, value, mContext.getResources().getDisplayMetrics());
     }
-  }
+    }
