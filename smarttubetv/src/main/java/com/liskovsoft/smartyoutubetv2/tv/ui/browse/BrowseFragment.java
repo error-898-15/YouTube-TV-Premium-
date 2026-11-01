@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
 import android.util.TypedValue;
+import android.view.FocusFinder;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -44,8 +45,8 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
 import com.liskovsoft.smartyoutubetv2.common.app.models.errors.ErrorFragmentData;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.PlaybackPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.SearchPresenter;
-import com.liskovsoft.smartyoutubetv2.common.app.presenters.SplashPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AccountSelectionPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.BrowseView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
@@ -54,14 +55,15 @@ import com.liskovsoft.smartyoutubetv2.tv.presenter.IconHeaderItemPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.ui.browse.dialog.ErrorDialogFragment;
 import com.liskovsoft.smartyoutubetv2.tv.ui.widgets.browse.NavigateTitleView;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Fixed SmartTube BrowseFragment using androidx.leanback.app.BrowseSupportFragment
- * with Permanent Expandable Icon Sidebar (72dp icon rail -> 240dp expanded drawer).
+ * Complete SmartTube BrowseFragment with Permanent Expandable Icon Sidebar
+ * (72dp collapsed icon rail -> 240dp expanded drawer) and full video loading support.
  */
 public class BrowseFragment extends BrowseSupportFragment implements BrowseView {
     private static final String TAG = BrowseFragment.class.getSimpleName();
@@ -86,6 +88,10 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     private PermanentSidebarController mSidebarController;
     private View mBrowseContainerDock;
+
+    private Method mUpdateVideoGroupMethod;
+    private Method mUpdateSettingsGroupMethod;
+    private Method mSelectVideoItemMethod;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -132,7 +138,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         mBrowseContainerDock = root.findViewById(R.id.browse_container_dock);
         View headersDock = root.findViewById(R.id.browse_headers_dock);
 
-        // Hide default Leanback header dock offscreen while keeping PageRow fragment switching active
+        // Hide default Leanback header dock offscreen while keeping PageRow fragment creation active
         if (headersDock != null) {
             headersDock.setAlpha(0f);
             headersDock.setTranslationX(-4000f);
@@ -191,7 +197,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
             if (mSelectedVideo != null) {
                 if (mIsPlayerInForeground) {
-                    SplashPresenter.instance(getContext()).openVideo(mSelectedVideo);
+                    PlaybackPresenter.instance(getContext()).openVideo(mSelectedVideo);
                 } else {
                     selectSectionItem(mSelectedVideo);
                 }
@@ -284,7 +290,15 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                             }
                         }
                         return null;
-                    } else if (direction == View.FOCUS_LEFT) {
+                    } else if (direction == View.FOCUS_LEFT && mBrowseContainerDock instanceof ViewGroup) {
+                        // First check if there is another video card to the left inside the video grid
+                        View nextInContent = FocusFinder.getInstance().findNextFocus(
+                                (ViewGroup) mBrowseContainerDock, focused, View.FOCUS_LEFT
+                        );
+                        if (nextInContent != null) {
+                            return nextInContent;
+                        }
+                        // Only when at the leftmost video card, expand and focus the sidebar
                         mSidebarController.setExpanded(true);
                         return mSidebarController.getSelectedFocusTarget();
                     }
@@ -301,9 +315,10 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     }
 
     // =========================================================================
-    // BrowseView Methods
+    // BrowseView Interface Implementation
     // =========================================================================
 
+    @Override
     public void addSection(int index, BrowseSection section) {
         if (section == null) return;
 
@@ -315,6 +330,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
+    @Override
     public void removeSection(BrowseSection section) {
         if (section == null) return;
 
@@ -326,6 +342,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
+    @Override
     public void removeAllSections() {
         mSections.clear();
         mSectionRowAdapter.clear();
@@ -341,21 +358,110 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
+    @Override
     public void updateSection(VideoGroup group) {
         restoreMainFragment();
-        mFragmentFactory.updateFragment(group);
+        invokeFactoryUpdateVideoGroup(group);
         fixPlayerSurface();
     }
 
+    @Override
     public void updateSection(SettingsGroup group) {
         restoreMainFragment();
-        mFragmentFactory.updateFragment(group);
+        invokeFactoryUpdateSettingsGroup(group);
     }
 
+    @Override
     public void updateErrorIfEmpty(ErrorFragmentData data) {
         if (isEmpty()) {
             replaceMainFragment(new ErrorDialogFragment(data));
         }
+    }
+
+    @Override
+    public void updateBadge() {
+        updateTitleViewSafely();
+    }
+
+    private void invokeFactoryUpdateVideoGroup(VideoGroup group) {
+        if (mFragmentFactory == null || group == null) return;
+        try {
+            if (mUpdateVideoGroupMethod == null) {
+                mUpdateVideoGroupMethod = findSingleParamMethod(
+                        mFragmentFactory.getClass(), VideoGroup.class,
+                        "updateCurrentFragment", "updateFragment"
+                );
+            }
+            if (mUpdateVideoGroupMethod != null) {
+                mUpdateVideoGroupMethod.invoke(mFragmentFactory, group);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void invokeFactoryUpdateSettingsGroup(SettingsGroup group) {
+        if (mFragmentFactory == null || group == null) return;
+        try {
+            if (mUpdateSettingsGroupMethod == null) {
+                mUpdateSettingsGroupMethod = findSingleParamMethod(
+                        mFragmentFactory.getClass(), SettingsGroup.class,
+                        "updateCurrentFragment", "updateFragment"
+                );
+            }
+            if (mUpdateSettingsGroupMethod != null) {
+                mUpdateSettingsGroupMethod.invoke(mFragmentFactory, group);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void invokeFactorySelectVideoItem(Video item) {
+        if (mFragmentFactory == null || item == null) return;
+        try {
+            if (mSelectVideoItemMethod == null) {
+                mSelectVideoItemMethod = findSingleParamMethod(
+                        mFragmentFactory.getClass(), Video.class,
+                        "selectCurrentFragmentItem", "selectFragmentItem", "setCurrentFragmentItem"
+                );
+            }
+            if (mSelectVideoItemMethod != null) {
+                mSelectVideoItemMethod.invoke(mFragmentFactory, item);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void updateTitleViewSafely() {
+        if (mTitleView == null) return;
+        String[] candidates = {"updateBadge", "update", "refresh"};
+        for (String name : candidates) {
+            try {
+                Method m = mTitleView.getClass().getMethod(name);
+                m.setAccessible(true);
+                m.invoke(mTitleView);
+                return;
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private static Method findSingleParamMethod(Class<?> cls, Class<?> paramType, String... preferredNames) {
+        for (String name : preferredNames) {
+            try {
+                Method m = cls.getDeclaredMethod(name, paramType);
+                m.setAccessible(true);
+                return m;
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
+        for (Method m : cls.getDeclaredMethods()) {
+            Class<?>[] params = m.getParameterTypes();
+            if (params.length == 1 && params[0].isAssignableFrom(paramType)) {
+                m.setAccessible(true);
+                return m;
+            }
+        }
+        return null;
     }
 
     private void replaceMainFragment(ErrorDialogFragment fragment) {
@@ -410,6 +516,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
+    @Override
     public void selectSection(int index, boolean focusOnContent) {
         if (index >= 0 && index < mSectionRowAdapter.size()) {
             mFocusOnContent = focusOnContent;
@@ -418,11 +525,12 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 mSidebarController.setSelectedSectionIndex(index, !focusOnContent);
             }
 
-            if (getSelectedPosition() == index) {
+            boolean alreadySelected = (getSelectedPosition() == index) && (getMainFragment() != null);
+            setSelectedPosition(index, false);
+
+            if (alreadySelected) {
                 focusOnContentIfNeeded();
                 mBrowsePresenter.onSectionFocused(getSelectedHeaderId());
-            } else {
-                setSelectedPosition(index, false);
             }
         }
     }
@@ -430,12 +538,13 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     public void selectSectionFromSidebar(int sectionIndex, int sectionId, boolean moveFocusToContent) {
         if (sectionIndex >= 0 && sectionIndex < mSectionRowAdapter.size()) {
             mFocusOnContent = moveFocusToContent;
-            if (getSelectedPosition() != sectionIndex) {
-                setSelectedPosition(sectionIndex, false);
-            }
-            mBrowsePresenter.onSectionFocused(sectionId);
-            if (moveFocusToContent) {
-                focusOnContent();
+            boolean alreadySelected = (getSelectedPosition() == sectionIndex) && (getMainFragment() != null);
+            setSelectedPosition(sectionIndex, false);
+            if (alreadySelected) {
+                mBrowsePresenter.onSectionFocused(sectionId);
+                if (moveFocusToContent) {
+                    focusOnContent();
+                }
             }
         }
     }
@@ -446,6 +555,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
+    @Override
     public void focusOnContent() {
         startHeadersTransition(false);
         if (mSidebarController != null) {
@@ -473,18 +583,21 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         return (int) ((PageRow) item).getHeaderItem().getId();
     }
 
+    @Override
     public void selectSectionItem(int index) {
         if (index >= 0) {
             mFragmentFactory.setCurrentFragmentItemIndex(index);
         }
     }
 
+    @Override
     public void selectSectionItem(Video item) {
         if (item != null) {
-            mFragmentFactory.selectFragmentItem(item);
+            invokeFactorySelectVideoItem(item);
         }
     }
 
+    @Override
     public void showProgressBar(boolean show) {
         mIsProgressBarShowing = show;
         Runnable callback = () -> {
@@ -503,10 +616,12 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
+    @Override
     public boolean isProgressBarShowing() {
         return mIsProgressBarShowing;
     }
 
+    @Override
     public boolean isEmpty() {
         return mFragmentFactory == null || mFragmentFactory.isEmpty();
     }
@@ -532,9 +647,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
         mIsFragmentCreated = false;
 
-        if (mTitleView != null) {
-            mTitleView.update();
-        }
+        updateTitleViewSafely();
     }
 
     private static int dpToPx(Context context, int dp) {
