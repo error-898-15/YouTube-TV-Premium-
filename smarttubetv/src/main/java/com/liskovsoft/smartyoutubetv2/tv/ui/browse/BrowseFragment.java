@@ -28,6 +28,7 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.leanback.app.BrowseSupportFragment;
 import androidx.leanback.widget.ArrayObjectAdapter;
 import androidx.leanback.widget.BrowseFrameLayout;
 import androidx.leanback.widget.HeaderItem;
@@ -51,10 +52,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.IconHeaderItemPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.ui.browse.dialog.ErrorDialogFragment;
-import com.liskovsoft.smartyoutubetv2.tv.ui.mod.leanback.browse.BrowseSupportFragment;
-import com.liskovsoft.smartyoutubetv2.tv.ui.mod.leanback.misc.ProgressBarManager;
 import com.liskovsoft.smartyoutubetv2.tv.ui.widgets.browse.NavigateTitleView;
-import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -62,8 +60,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Complete SmartTube BrowseFragment with real video loading (BrowsePresenter + BrowseSectionFragmentFactory)
- * AND YouTube TV style Permanent Icon Sidebar (72dp collapsed icon rail -> 240dp expanded drawer).
+ * Fixed SmartTube BrowseFragment using androidx.leanback.app.BrowseSupportFragment
+ * with Permanent Expandable Icon Sidebar (72dp icon rail -> 240dp expanded drawer).
  */
 public class BrowseFragment extends BrowseSupportFragment implements BrowseView {
     private static final String TAG = BrowseFragment.class.getSimpleName();
@@ -84,6 +82,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     private Video mSelectedVideo;
     private boolean mIsPlayerInForeground;
     private boolean mFocusOnContent;
+    private boolean mIsProgressBarShowing;
 
     private PermanentSidebarController mSidebarController;
     private View mBrowseContainerDock;
@@ -133,7 +132,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         mBrowseContainerDock = root.findViewById(R.id.browse_container_dock);
         View headersDock = root.findViewById(R.id.browse_headers_dock);
 
-        // ডিফল্ট Leanback হেডারটিকে স্ক্রিনের বাইরে লুকিয়ে রাখা (যাতে PageRow সিলেকশন ও ভিডিও লোডিং ঠিকমতো কাজ করে)
+        // Hide default Leanback header dock offscreen while keeping PageRow fragment switching active
         if (headersDock != null) {
             headersDock.setAlpha(0f);
             headersDock.setTranslationX(-4000f);
@@ -143,7 +142,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             }
         }
 
-        // ডানপাশের আসল ভিডিও গ্রিডের বামপাশে সবসময় 72dp জায়গা রাখা যেন পার্মানেন্ট আইকন বারের নিচে ভিডিও না ঢাকে
+        // Keep 72dp left margin on video container so permanent icon rail never overlaps video cards
         if (mBrowseContainerDock != null) {
             final int collapsedPx = dpToPx(requireContext(), PermanentSidebarController.COLLAPSED_WIDTH_DP);
             enforceContainerMargin(collapsedPx);
@@ -152,7 +151,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             });
         }
 
-        // পার্মানেন্ট আইকন সাইডবার তৈরি এবং আসল BrowseFragment-এর সাথে যুক্ত করা
+        // Attach Permanent Sidebar Controller
         if (root instanceof ViewGroup) {
             mSidebarController = new PermanentSidebarController(requireContext(), this);
             ((ViewGroup) root).addView(mSidebarController.getSidebarView());
@@ -184,7 +183,6 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         prepareEntranceTransition();
 
-        // এটি কল করলেই SmartTube-এর সব সেকশন ও ভিডিও লোড হওয়া শুরু হবে
         mBrowsePresenter.onViewInitialized();
 
         if (mSelectedHeaderIndex != -1) {
@@ -222,8 +220,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         setHeadersState(HEADERS_ENABLED);
         setHeadersTransitionOnBackEnabled(true);
 
-        int brandColorRes = ViewUtil.getThemeColorRes(getContext(), R.attr.brandAccentColor, R.color.fastlane_background);
-        setBrandColor(ContextCompat.getColor(requireContext(), brandColorRes));
+        setBrandColor(ContextCompat.getColor(requireContext(), R.color.fastlane_background));
 
         setHeaderPresenterSelector(new PresenterSelector() {
             @Override
@@ -255,32 +252,23 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 }
         );
 
-        ((ExtendedHeadersSupportFragment) getHeadersSupportFragment()).setOnHeaderLongPressedListener(
-                (viewHolder, row) -> {
-                    long headerId = row.getHeaderItem().getId();
-                    mBrowsePresenter.onSectionLongPressed((int) headerId);
-                }
-        );
-
         setBrowseTransitionListener(new BrowseTransitionListener() {
             @Override
             public void onHeadersTransitionStart(boolean withHeaders) {
                 if (withHeaders && mSidebarController != null) {
-                    // রিমোটে Back চাপলে বা বামদিকে আসলে আমাদের পার্মানেন্ট সাইডবারে ফোকাস আসবে
                     mSidebarController.focusSelectedRow();
-                    startHeadersTransitionInternal(false);
+                    startHeadersTransition(false);
                 }
             }
 
             @Override
             public void onHeadersTransitionStop(boolean withHeaders) {
                 if (withHeaders) {
-                    startHeadersTransitionInternal(false);
+                    startHeadersTransition(false);
                 }
             }
         });
 
-        // ভিডিও গ্রিডের বাম প্রান্তে থেকে D-Pad Left চাপলে সাইডবারে ফোকাস যাবে এবং D-Pad Right চাপলে ভিডিওতে যাবে
         if (getView() != null) {
             BrowseFrameLayout browseFrame = getView().findViewById(R.id.browse_frame);
             if (browseFrame != null) {
@@ -307,17 +295,15 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     }
 
     private void updateWaitTime() {
-        ProgressBarManager progressBarManager = getProgressBarManager();
-        if (progressBarManager != null) {
-            progressBarManager.setInitialDelay(0);
+        if (getProgressBarManager() != null) {
+            getProgressBarManager().setInitialDelay(0);
         }
     }
 
     // =========================================================================
-    // BrowseView Implementation (SmartTube-er Asol Video Loading Methods)
+    // BrowseView Methods
     // =========================================================================
 
-    @Override
     public void addSection(int index, BrowseSection section) {
         if (section == null) return;
 
@@ -329,7 +315,6 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
-    @Override
     public void removeSection(BrowseSection section) {
         if (section == null) return;
 
@@ -341,7 +326,6 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
-    @Override
     public void removeAllSections() {
         mSections.clear();
         mSectionRowAdapter.clear();
@@ -351,20 +335,23 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
-    @Override
+    public void clearSection(BrowseSection section) {
+        if (mFragmentFactory != null) {
+            mFragmentFactory.clearCurrentFragment();
+        }
+    }
+
     public void updateSection(VideoGroup group) {
         restoreMainFragment();
         mFragmentFactory.updateFragment(group);
         fixPlayerSurface();
     }
 
-    @Override
     public void updateSection(SettingsGroup group) {
         restoreMainFragment();
         mFragmentFactory.updateFragment(group);
     }
 
-    @Override
     public void updateErrorIfEmpty(ErrorFragmentData data) {
         if (isEmpty()) {
             replaceMainFragment(new ErrorDialogFragment(data));
@@ -423,7 +410,6 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
-    @Override
     public void selectSection(int index, boolean focusOnContent) {
         if (index >= 0 && index < mSectionRowAdapter.size()) {
             mFocusOnContent = focusOnContent;
@@ -432,7 +418,6 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 mSidebarController.setSelectedSectionIndex(index, !focusOnContent);
             }
 
-            // একই সেকশন বা নতুন সেকশন সিলেক্ট করে ভিডিও রিফ্রেশ করা
             if (getSelectedPosition() == index) {
                 focusOnContentIfNeeded();
                 mBrowsePresenter.onSectionFocused(getSelectedHeaderId());
@@ -461,9 +446,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
-    @Override
     public void focusOnContent() {
-        startHeadersTransitionInternal(false);
+        startHeadersTransition(false);
         if (mSidebarController != null) {
             mSidebarController.setExpanded(false);
         }
@@ -477,7 +461,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             focusOnContent();
             mFocusOnContent = false;
         } else {
-            startHeadersTransitionInternal(false);
+            startHeadersTransition(false);
         }
     }
 
@@ -489,24 +473,22 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         return (int) ((PageRow) item).getHeaderItem().getId();
     }
 
-    @Override
     public void selectSectionItem(int index) {
         if (index >= 0) {
             mFragmentFactory.setCurrentFragmentItemIndex(index);
         }
     }
 
-    @Override
     public void selectSectionItem(Video item) {
         if (item != null) {
             mFragmentFactory.selectFragmentItem(item);
         }
     }
 
-    @Override
     public void showProgressBar(boolean show) {
+        mIsProgressBarShowing = show;
         Runnable callback = () -> {
-            if (!isAdded()) return;
+            if (!isAdded() || getProgressBarManager() == null) return;
             if (show) {
                 getProgressBarManager().show();
             } else {
@@ -521,12 +503,10 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
     }
 
-    @Override
     public boolean isProgressBarShowing() {
-        return getProgressBarManager().isShowing();
+        return mIsProgressBarShowing;
     }
 
-    @Override
     public boolean isEmpty() {
         return mFragmentFactory == null || mFragmentFactory.isEmpty();
     }
@@ -563,7 +543,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     }
 
     // =========================================================================
-    // Permanent Expandable Icon Sidebar Controller (Synced with BrowsePresenter)
+    // Permanent Expandable Icon Sidebar Controller
     // =========================================================================
 
     private static class PermanentSidebarController {
@@ -582,12 +562,12 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         private final List<RowHolder> mHolders = new ArrayList<>();
 
         private boolean mIsExpanded = false;
-        private int mSelectedRowIndex = 2; // Default first section (Home)
+        private int mSelectedRowIndex = 2;
         private ValueAnimator mWidthAnimator;
         private Runnable mPendingSectionLoad;
 
         private static class SidebarEntry {
-            final int sectionIndex; // -1 for Profile/Search, >= 0 for BrowseSection index
+            final int sectionIndex;
             final int sectionId;
             final String title;
             final int iconResId;
@@ -691,10 +671,15 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             mItemsContainer.removeAllViews();
             mHolders.clear();
 
+            int accountIconId = mContext.getResources().getIdentifier("header_account", "drawable", mContext.getPackageName());
+            if (accountIconId == 0) accountIconId = android.R.drawable.sym_def_app_icon;
+
+            int searchIconId = mContext.getResources().getIdentifier("action_search", "drawable", mContext.getPackageName());
+            if (searchIconId == 0) searchIconId = android.R.drawable.ic_menu_search;
+
             List<SidebarEntry> entries = new ArrayList<>();
-            // Top Profile & Search options
-            entries.add(new SidebarEntry(-1, ACTION_PROFILE, "Profile", R.drawable.header_account, true));
-            entries.add(new SidebarEntry(-1, ACTION_SEARCH, "Search", android.R.drawable.ic_menu_search, false));
+            entries.add(new SidebarEntry(-1, ACTION_PROFILE, "Profile", accountIconId, true));
+            entries.add(new SidebarEntry(-1, ACTION_SEARCH, "Search", searchIconId, false));
 
             int secIdx = 0;
             for (BrowseSection section : sectionsMap.values()) {
@@ -924,4 +909,4 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             }
         }
     }
-        }
+}
