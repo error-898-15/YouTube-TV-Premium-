@@ -1367,6 +1367,9 @@ public class BrowseSupportFragment extends BaseSupportFragment {
                 // Animate TitleView once header animation is complete.
                 updateTitleViewVisibility();
 
+                // MOD: permanent rail. Transition must not leave the sidebar icons hidden.
+                ensureRailVisible();
+
                 if (mBrowseTransitionListener != null) {
                     mBrowseTransitionListener.onHeadersTransitionStop(mShowingHeaders);
                 }
@@ -1472,6 +1475,29 @@ public class BrowseSupportFragment extends BaseSupportFragment {
             MarginLayoutParams contentLp = (MarginLayoutParams) mScaleFrameLayout.getLayoutParams();
             contentLp.setMarginStart(onScreen ? mContainerListMarginStart : mCollapsedHeadersWidth);
             mScaleFrameLayout.setLayoutParams(contentLp);
+        }
+
+        ensureRailVisible();
+    }
+
+    /**
+     * MOD: permanent rail. Never let leanback hide the sidebar icons
+     * (setHeadersEnabled(false) / headers_out transition fade them out otherwise).
+     */
+    private void ensureRailVisible() {
+        if (mHeadersSupportFragment == null || !mCanShowHeaders) {
+            return;
+        }
+        View headersView = mHeadersSupportFragment.getView();
+        if (headersView != null) {
+            headersView.setVisibility(View.VISIBLE);
+            headersView.setAlpha(1f);
+        }
+        VerticalGridView headersGrid = mHeadersSupportFragment.getVerticalGridView();
+        if (headersGrid != null) {
+            headersGrid.setVisibility(View.VISIBLE);
+            headersGrid.setAlpha(1f);
+            headersGrid.setChildrenVisibility(View.VISIBLE);
         }
     }
 
