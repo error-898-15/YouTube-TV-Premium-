@@ -1,647 +1,401 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.browse;
 
-import android.graphics.drawable.Drawable;
+import android.animation.ValueAnimator;
+import android.content.Context;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.view.LayoutInflater;
+import android.text.TextUtils;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentTransaction;
-import androidx.leanback.app.BrowseSupportFragment;
-import androidx.leanback.app.HeadersSupportFragment;
-import androidx.leanback.widget.ArrayObjectAdapter;
-import androidx.leanback.widget.HeaderItem;
-import androidx.leanback.widget.ItemBridgeAdapter;
-import androidx.leanback.widget.VerticalGridView;
-import androidx.recyclerview.widget.RecyclerView;
-import androidx.leanback.widget.ListRowPresenter;
-import androidx.leanback.widget.PageRow;
-import androidx.leanback.widget.Presenter;
-import androidx.leanback.widget.PresenterSelector;
-import androidx.leanback.widget.TitleHelper;
-import com.liskovsoft.sharedutils.helpers.Helpers;
-import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
-import com.liskovsoft.smartyoutubetv2.common.app.models.data.BrowseSection;
-import com.liskovsoft.smartyoutubetv2.common.app.models.data.SettingsGroup;
-import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
-import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
-import com.liskovsoft.smartyoutubetv2.common.app.models.errors.ErrorFragmentData;
-import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
-import com.liskovsoft.smartyoutubetv2.common.app.presenters.SearchPresenter;
-import com.liskovsoft.smartyoutubetv2.common.app.presenters.SplashPresenter;
-import com.liskovsoft.smartyoutubetv2.common.app.views.BrowseView;
-import com.liskovsoft.smartyoutubetv2.common.misc.CrashRestorer;
-import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.smartyoutubetv2.tv.R;
-import com.liskovsoft.smartyoutubetv2.tv.presenter.IconHeaderItemPresenter;
-import com.liskovsoft.smartyoutubetv2.tv.ui.browse.dialog.ErrorDialogFragment;
-import com.liskovsoft.smartyoutubetv2.tv.ui.mod.leanback.headers.ExtendedHeadersSupportFragment;
-import com.liskovsoft.smartyoutubetv2.tv.ui.mod.leanback.misc.ProgressBarManager;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
-/*
- * Main class to show BrowseFragment with header and rows of videos
+/**
+ * Ekta file-er moddhei YouTube TV style Permanent Icon Sidebar + Expandable Drawer.
+ * Video grid-e focus thakle sudhu Icon dekhabe (72dp), ar Left chaple expand hoye Text + Icon dekhabe (240dp).
  */
-public class BrowseFragment extends BrowseSupportFragment implements BrowseView {
-    private static final String TAG = BrowseFragment.class.getSimpleName();
-    private ArrayObjectAdapter mSectionRowAdapter;
-    private BrowsePresenter mBrowsePresenter;
-    private Map<Integer, BrowseSection> mSections;
-    private BrowseSectionFragmentFactory mSectionFragmentFactory;
-    private Handler mHandler;
-    private ProgressBarManager mProgressBarManager;
-    private boolean mIsFragmentCreated;
-    private boolean mFocusOnContent;
-    private CrashRestorer mCrashRestorer;
+public class BrowseFragment extends Fragment {
 
+    private PermanentSidebarController mSidebarController;
+    private FrameLayout mRootContainer;
+    private FrameLayout mContentContainer;
+
+    @Nullable
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(null);
+    public View onCreateView(@NonNull android.view.LayoutInflater inflater,
+                             @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
+        Context context = requireContext();
 
-        if (getContext() == null) {
-            return;
+        // Root Container
+        mRootContainer = new FrameLayout(context);
+        mRootContainer.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        mRootContainer.setBackgroundColor(Color.parseColor("#0F0F0F"));
+
+        // ডানদিকের মেইন কনটেন্ট কন্টেইনার (যেখানে ভিডিও গ্রিড ও সার্চ রেজাল্ট থাকবে)
+        // বামপাশে সবসময় 72dp জায়গা ফাঁকা রাখা হয়েছে যাতে আইকন বারের নিচে ভিডিও ঢেকে না যায়
+        mContentContainer = new FrameLayout(context);
+        FrameLayout.LayoutParams contentParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        );
+        contentParams.leftMargin = dpToPx(context, PermanentSidebarController.COLLAPSED_WIDTH_DP);
+        mContentContainer.setLayoutParams(contentParams);
+        mRootContainer.addView(mContentContainer);
+
+        // এক ফাইলের ভেতরেই পার্মানেন্ট সাইডবার তৈরি এবং যুক্ত করা
+        mSidebarController = new PermanentSidebarController(context, mContentContainer, item -> {
+            // এখানে সাইডবারের যেকোনো অপশন সিলেক্ট হলে আপনার সেকশন পরিবর্তন হবে
+            onSidebarItemSelected(item);
+        });
+
+        mRootContainer.addView(mSidebarController.getSidebarView());
+
+        return mRootContainer;
+    }
+
+    /**
+     * আপনার আগের যেকোনো существующий (existing) BrowseSupportFragment বা Activity-র View-তেও
+     * চাইলে শুধু এই একটি মেথড কল করে সাইডবারটি বসিয়ে দিতে পারেন:
+     * BrowseFragment.attachPermanentSidebar(rootViewGroup, mainContentView, listener);
+     */
+    public static PermanentSidebarController attachPermanentSidebar(
+            @NonNull ViewGroup rootViewGroup,
+            @NonNull View mainContentView,
+            @Nullable OnSidebarItemClickListener listener) {
+
+        Context context = rootViewGroup.getContext();
+
+        // মেইন কনটেন্টকে বামপাশ থেকে 72dp সরিয়ে রাখা যেন আইকন সবসময় দেখা যায়
+        if (mainContentView.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) mainContentView.getLayoutParams();
+            params.leftMargin = dpToPx(context, PermanentSidebarController.COLLAPSED_WIDTH_DP);
+            mainContentView.setLayoutParams(params);
+        } else {
+            mainContentView.setPadding(
+                    dpToPx(context, PermanentSidebarController.COLLAPSED_WIDTH_DP),
+                    mainContentView.getPaddingTop(),
+                    mainContentView.getPaddingRight(),
+                    mainContentView.getPaddingBottom()
+            );
         }
-        
-        mCrashRestorer = new CrashRestorer(getContext(), savedInstanceState);
-        mIsFragmentCreated = true;
 
-        mSections = new HashMap<>();
-        mHandler = new Handler();
-        mBrowsePresenter = BrowsePresenter.instance(getContext());
-        mBrowsePresenter.setView(this);
-        mProgressBarManager = new ProgressBarManager();
-
-        setupAdapter();
-        setupFragmentFactory();
-        setupUi();
-
-        enableMainFragmentScaling(false);
+        PermanentSidebarController controller = new PermanentSidebarController(context, mainContentView, listener);
+        rootViewGroup.addView(controller.getSidebarView());
+        return controller;
     }
 
-    @Override
-    public void onSaveInstanceState(@NonNull Bundle outState) {
-        super.onSaveInstanceState(outState);
-
-        // Called when the activity is paused
-        mCrashRestorer.persistHeaderIndex(outState, getSelectedPosition());
-        mCrashRestorer.persistVideo(outState, mBrowsePresenter.getCurrentVideo());
+    private void onSidebarItemSelected(SidebarItem item) {
+        // আপনার অ্যাপের সেকশন/ক্যাটাগরি লোড করার লজিক এখানে কাজ করবে
     }
 
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View root = super.onCreateView(inflater, container, savedInstanceState);
-
-        mProgressBarManager.setRootView((ViewGroup) root);
-
-        return root;
+    private static int dpToPx(Context context, int dp) {
+        return Math.round(TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, dp, context.getResources().getDisplayMetrics()));
     }
 
-    @Override
-    public void onActivityCreated(Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
-
-        setupEventListeners();
-
-        prepareEntranceTransition();
-
-        mBrowsePresenter.onViewInitialized();
-
-        // Restore state after crash
-        mCrashRestorer.restoreHeader((idx, video) -> {
-            selectSection(idx, true);
-            selectSectionItem(video);
-        });
-        mCrashRestorer.restorePlayback();
+    public interface OnSidebarItemClickListener {
+        void onItemSelected(SidebarItem item);
     }
 
-    @Override
-    public HeadersSupportFragment onCreateHeadersSupportFragment() {
-        return new ExtendedHeadersSupportFragment();
+    public static class SidebarItem {
+        public final int id;
+        public final String title;
+        public final int iconResId;
+        public final boolean isHeader;
+
+        public SidebarItem(int id, String title, int iconResId, boolean isHeader) {
+            this.id = id;
+            this.title = title;
+            this.iconResId = iconResId;
+            this.isHeader = isHeader;
+        }
     }
 
-    private void setupEventListeners() {
-        // Mini rail: hide labels when sidebar is collapsed, show them when expanded
-        setBrowseTransitionListener(new BrowseSupportFragment.BrowseTransitionListener() {
-            @Override
-            public void onHeadersTransitionStart(boolean withHeaders) {
-                applyRailState(withHeaders);
+    /**
+     * সম্পূর্ণ সাইডবার ইউআই, ফোকাস হ্যান্ডলিং এবং অ্যানিমেশন কন্ট্রোলার (একই ফাইলের ভেতর)
+     */
+    public static class PermanentSidebarController {
+        public static final int COLLAPSED_WIDTH_DP = 72; // সবসময় আইকন দেখানোর প্রস্থ
+        public static final int EXPANDED_WIDTH_DP = 240; // অপশনে গেলে বড় হওয়ার প্রস্থ
+
+        private final Context mContext;
+        private final View mMainContentView;
+        private final OnSidebarItemClickListener mListener;
+
+        private final FrameLayout mSidebarWrapper;
+        private final LinearLayout mItemsContainer;
+        private final List<ViewHolder> mHolders = new ArrayList<>();
+
+        private boolean mIsExpanded = false;
+        private int mSelectedIndex = 2; // Default: Home সিলেক্টেড থাকবে
+        private ValueAnimator mWidthAnimator;
+
+        private static class ViewHolder {
+            final LinearLayout rowView;
+            final ImageView iconView;
+            final TextView titleView;
+            final SidebarItem item;
+
+            ViewHolder(LinearLayout rowView, ImageView iconView, TextView titleView, SidebarItem item) {
+                this.rowView = rowView;
+                this.iconView = iconView;
+                this.titleView = titleView;
+                this.item = item;
             }
+        }
 
-            @Override
-            public void onHeadersTransitionStop(boolean withHeaders) {
-                applyRailState(withHeaders);
+        public PermanentSidebarController(Context context, View mainContentView, OnSidebarItemClickListener listener) {
+            mContext = context;
+            mMainContentView = mainContentView;
+            mListener = listener;
+
+            mSidebarWrapper = new FrameLayout(context);
+            FrameLayout.LayoutParams wrapperParams = new FrameLayout.LayoutParams(
+                    dpToPx(context, COLLAPSED_WIDTH_DP),
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    Gravity.START
+            );
+            mSidebarWrapper.setLayoutParams(wrapperParams);
+            mSidebarWrapper.setBackgroundColor(Color.parseColor("#E60F0F0F"));
+            mSidebarWrapper.setElevation(dpToPx(context, 12));
+
+            ScrollView scrollView = new ScrollView(context);
+            scrollView.setVerticalScrollBarEnabled(false);
+            scrollView.setFillViewport(true);
+
+            mItemsContainer = new LinearLayout(context);
+            mItemsContainer.setOrientation(LinearLayout.VERTICAL);
+            mItemsContainer.setGravity(Gravity.CENTER_VERTICAL);
+            int verticalPad = dpToPx(context, 16);
+            mItemsContainer.setPadding(dpToPx(context, 10), verticalPad, dpToPx(context, 10), verticalPad);
+
+            scrollView.addView(mItemsContainer);
+            mSidebarWrapper.addView(scrollView);
+
+            setupDefaultYoutubeItems();
+            applyCollapsedStateImmediate();
+        }
+
+        public View getSidebarView() {
+            return mSidebarWrapper;
+        }
+
+        private void setupDefaultYoutubeItems() {
+            List<SidebarItem> items = new ArrayList<>();
+            // ভিডিওর মতো হুবহু মেনু অপশনগুলো
+            items.add(new SidebarItem(0, "Profile", android.R.drawable.sym_def_app_icon, true));
+            items.add(new SidebarItem(1, "Search", android.R.drawable.ic_menu_search, false));
+            items.add(new SidebarItem(2, "Home", android.R.drawable.ic_menu_compass, false));
+            items.add(new SidebarItem(3, "Shorts", android.R.drawable.ic_media_play, false));
+            items.add(new SidebarItem(4, "Subscriptions", android.R.drawable.ic_menu_slideshow, false));
+            items.add(new SidebarItem(5, "Library", android.R.drawable.ic_menu_recent_history, false));
+            items.add(new SidebarItem(6, "Gaming", android.R.drawable.ic_menu_manage, false));
+            items.add(new SidebarItem(7, "Music", android.R.drawable.ic_lock_silent_mode_off, false));
+            items.add(new SidebarItem(8, "News", android.R.drawable.ic_menu_info_details, false));
+            items.add(new SidebarItem(9, "Sports", android.R.drawable.ic_menu_myplaces, false));
+            items.add(new SidebarItem(10, "Settings", android.R.drawable.ic_menu_preferences, false));
+
+            for (int i = 0; i < items.size(); i++) {
+                final int index = i;
+                SidebarItem item = items.get(i);
+                ViewHolder holder = createRowView(item, index);
+                mHolders.add(holder);
+                mItemsContainer.addView(holder.rowView);
             }
-        });
+            updateVisualSelection();
+        }
 
-        getHeadersSupportFragment().setOnHeaderClickedListener(
-                (viewHolder, row) -> {
-                    long headerId = row.getHeaderItem().getId();
-                    int newPosition = indexOf(headerId);
+        private ViewHolder createRowView(SidebarItem item, final int index) {
+            LinearLayout row = new LinearLayout(mContext);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setFocusable(true);
+            row.setFocusableInTouchMode(true);
 
-                    if (getHeadersSupportFragment().getSelectedPosition() != newPosition) {
-                        // touch screen support
-                        getHeadersSupportFragment().setSelectedPosition(newPosition);
-                    } else {
-                        // update section when clicked or pressed
-                        mBrowsePresenter.onSectionFocused((int) headerId);
-                        startHeadersTransitionSafe(false);
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dpToPx(mContext, item.isHeader ? 52 : 44)
+            );
+            rowParams.topMargin = dpToPx(mContext, item.isHeader ? 0 : 4);
+            rowParams.bottomMargin = dpToPx(mContext, item.isHeader ? 12 : 2);
+            row.setLayoutParams(rowParams);
+            row.setPadding(dpToPx(mContext, 12), 0, dpToPx(mContext, 14), 0);
+
+            ImageView icon = new ImageView(mContext);
+            int iconSize = dpToPx(mContext, item.isHeader ? 28 : 24);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            icon.setLayoutParams(iconParams);
+            icon.setImageDrawable(ContextCompat.getDrawable(mContext, item.iconResId));
+            icon.setColorFilter(Color.WHITE);
+
+            TextView title = new TextView(mContext);
+            LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            titleParams.leftMargin = dpToPx(mContext, 18);
+            title.setLayoutParams(titleParams);
+            title.setText(item.title);
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, item.isHeader ? 16 : 15);
+            title.setTypeface(null, item.isHeader ? Typeface.BOLD : Typeface.NORMAL);
+            title.setTextColor(Color.WHITE);
+            title.setSingleLine(true);
+            title.setEllipsize(TextUtils.TruncateAt.END);
+
+            row.addView(icon);
+            row.addView(title);
+
+            // Focus গেলে সাইডবার নিজে থেকেই Expand হবে, আর Focus সরে গেলে শুধু Icon দেখাবে
+            row.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus) {
+                    mSelectedIndex = index;
+                    if (!mIsExpanded) {
+                        setExpanded(true);
+                    }
+                    if (mListener != null) {
+                        mListener.onItemSelected(item);
+                    }
+                } else {
+                    // সাইডবারের অন্য কোনো আইটেমে ফোকাস আছে কি না চেক করা
+                    mSidebarWrapper.post(() -> {
+                        if (!isAnySidebarItemFocused()) {
+                            setExpanded(false);
+                        }
+                    });
+                }
+                updateVisualSelection();
+            });
+
+            // রিমোটের D-Pad Right চাপলে ভিডিও গ্রিডে ফোকাস চলে যাবে এবং সাইডবার ছোট হয়ে শুধু আইকন দেখাবে
+            row.setOnKeyListener((v, keyCode, event) -> {
+                if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    if (mMainContentView != null) {
+                        mMainContentView.requestFocus();
+                        setExpanded(false);
+                        return true;
                     }
                 }
-        );
+                return false;
+            });
 
-        ((ExtendedHeadersSupportFragment) getHeadersSupportFragment()).setOnHeaderLongPressedListener(
-                (viewHolder, row) -> {
-                    long headerId = row.getHeaderItem().getId();
-
-                    mBrowsePresenter.onSectionLongPressed((int) headerId);
+            row.setOnClickListener(v -> {
+                mSelectedIndex = index;
+                updateVisualSelection();
+                if (mListener != null) {
+                    mListener.onItemSelected(item);
                 }
-        );
+            });
 
-        setOnSearchClickedListener(view -> SearchPresenter.instance(getContext()).startSearch(null));
-    }
-
-    private void setupFragmentFactory() {
-        mSectionFragmentFactory = new BrowseSectionFragmentFactory(
-                (row) -> {
-                    focusOnContentIfNeeded();
-                    mBrowsePresenter.onSectionFocused(getSelectedHeaderId());
-                }
-        );
-
-        getMainFragmentRegistry().registerFragment(PageRow.class, mSectionFragmentFactory);
-    }
-
-    private int indexOf(long headerId) {
-        for (int i = 0; i < mSectionRowAdapter.size(); i++) {
-            PageRow row = (PageRow) mSectionRowAdapter.get(i);
-            HeaderItem header = row.getHeaderItem();
-            if (header.getId() == headerId) {
-                return i;
-            }
+            return new ViewHolder(row, icon, title, item);
         }
 
-        return 0;
-    }
-
-    private void setupAdapter() {
-        // Map category results from the database to ListRow objects.
-        // This Adapter is used to render the MainFragment sidebar labels.
-        mSectionRowAdapter = new ArrayObjectAdapter(new ListRowPresenter());
-        setAdapter(mSectionRowAdapter);
-    }
-
-    private void setupUi() {
-        if (getContext() == null) {
-            return;
-        }
-
-        setHeadersState(HEADERS_ENABLED);
-        setHeadersTransitionOnBackEnabled(true);
-
-        int brandColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandColor);
-        int brandAccentColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandAccentColor);
-
-        updateBadge();
-
-        // This title replaces badge in case one is null
-        //setTitle(getString(R.string.browse_title));
-
-        // Set fastLane (or headers) background color
-        setBrandColor(0xFF0F0F0F);
-
-        // Set search icon color.
-        setSearchAffordanceColor(ContextCompat.getColor(getContext(), brandAccentColorRes));
-
-        setHeaderPresenterSelector(new PresenterSelector() {
-            private final Map<Integer, Presenter> mPresenterMap = new HashMap<>();
-
-            @Override
-            public Presenter getPresenter(Object o) {
-                Presenter presenter = mPresenterMap.get(o.hashCode());
-
-                if (presenter == null) {
-                    presenter = new IconHeaderItemPresenter(getHeaderResId(o), getIconUrl(o), BrowseFragment.this::getDividerMode);
-                    mPresenterMap.put(o.hashCode(), presenter);
-                }
-
-                return presenter;
-            }
-
-            private int getHeaderResId(Object o) {
-                if (o instanceof PageRow) {
-                    return ((SectionHeaderItem) ((PageRow) o).getHeaderItem()).getResId();
-                }
-
-                return -1;
-            }
-
-            private String getIconUrl(Object o) {
-                if (o instanceof PageRow) {
-                    return ((SectionHeaderItem) ((PageRow) o).getHeaderItem()).getIconUrl();
-                }
-
-                return null;
-            }
-        });
-    }
-
-    // ---- YouTube TV style sidebar groups (divider logic) ----
-    private static final int GROUP_MAIN = 0;     // Home, Shorts...
-    private static final int GROUP_LIBRARY = 1;  // pinned channels, Subscriptions, History, Playlists...
-    private static final int GROUP_EXPLORE = 2;  // Music, Gaming, Sports, News, Live...
-    private static final int GROUP_SETTINGS = 3; // Settings
-
-    private int getSectionGroup(Object o) {
-        if (!(o instanceof PageRow) || !(((PageRow) o).getHeaderItem() instanceof SectionHeaderItem)) {
-            return GROUP_MAIN;
-        }
-
-        SectionHeaderItem header = (SectionHeaderItem) ((PageRow) o).getHeaderItem();
-
-        if (header.getIconUrl() != null) { // pinned channel (avatar)
-            return GROUP_LIBRARY;
-        }
-
-        int id = (int) header.getId();
-
-        if (id == MediaGroup.TYPE_HOME || id == MediaGroup.TYPE_SHORTS || id == MediaGroup.TYPE_NOTIFICATIONS) {
-            return GROUP_MAIN;
-        }
-
-        if (id == MediaGroup.TYPE_SETTINGS) {
-            return GROUP_SETTINGS;
-        }
-
-        if (id == MediaGroup.TYPE_MUSIC || id == MediaGroup.TYPE_GAMING || id == MediaGroup.TYPE_SPORTS ||
-                id == MediaGroup.TYPE_NEWS || id == MediaGroup.TYPE_LIVE || id == MediaGroup.TYPE_TRENDING ||
-                id == MediaGroup.TYPE_KIDS_HOME) {
-            return GROUP_EXPLORE;
-        }
-
-        return GROUP_LIBRARY;
-    }
-
-    private int getDividerMode(Object item) {
-        if (mSectionRowAdapter == null) {
-            return IconHeaderItemPresenter.DIVIDER_NONE;
-        }
-
-        int index = mSectionRowAdapter.indexOf(item);
-
-        if (index <= 0) {
-            return IconHeaderItemPresenter.DIVIDER_NONE;
-        }
-
-        int current = getSectionGroup(item);
-        int previous = getSectionGroup(mSectionRowAdapter.get(index - 1));
-
-        if (current == previous) {
-            return IconHeaderItemPresenter.DIVIDER_NONE;
-        }
-
-        return current == GROUP_SETTINGS ? IconHeaderItemPresenter.DIVIDER_GAP : IconHeaderItemPresenter.DIVIDER_LINE;
-    }
-
-    private void refreshHeaderDividers() {
-        if (mSectionRowAdapter != null && mSectionRowAdapter.size() > 0) {
-            mSectionRowAdapter.notifyArrayItemRangeChanged(0, mSectionRowAdapter.size());
-        }
-
-        // New/rebound headers must follow the current rail state
-        mHandler.post(() -> applyRailState(isShowingHeaders()));
-    }
-
-    /**
-     * Collapsed sidebar = icon rail (labels hidden, only current section is bright).
-     */
-    private void applyRailState(boolean expanded) {
-        HeadersSupportFragment headers = getHeadersSupportFragment();
-
-        if (headers == null || headers.getView() == null) {
-            return;
-        }
-
-        VerticalGridView grid = headers.getVerticalGridView();
-
-        if (grid == null) {
-            return;
-        }
-
-        int selected = headers.getSelectedPosition();
-
-        for (int i = 0; i < grid.getChildCount(); i++) {
-            RecyclerView.ViewHolder vh = grid.getChildViewHolder(grid.getChildAt(i));
-
-            if (vh instanceof ItemBridgeAdapter.ViewHolder) {
-                Presenter.ViewHolder presenterVh = ((ItemBridgeAdapter.ViewHolder) vh).getViewHolder();
-
-                if (presenterVh instanceof IconHeaderItemPresenter.HeaderViewHolder) {
-                    ((IconHeaderItemPresenter.HeaderViewHolder) presenterVh)
-                            .setRailMode(!expanded, vh.getAdapterPosition() == selected);
+        private boolean isAnySidebarItemFocused() {
+            for (ViewHolder holder : mHolders) {
+                if (holder.rowView.hasFocus()) {
+                    return true;
                 }
             }
-        }
-    }
-
-    private int getSelectedHeaderId() {
-        if (getSelectedPosition() >= mSectionRowAdapter.size()) {
-            return -1;
-        }
-
-        return (int) ((PageRow) mSectionRowAdapter.get(getSelectedPosition())).getHeaderItem().getId();
-    }
-    
-    public void updateErrorIfEmpty(ErrorFragmentData data) {
-        mHandler.postDelayed(() -> showErrorIfEmpty(data), 500); // need delay because header may be not updated
-    }
-
-    @Override
-    public void showError(ErrorFragmentData data) {
-        replaceMainFragment(new ErrorDialogFragment(data));
-    }
-
-    private void showErrorIfEmpty(ErrorFragmentData data) {
-        if (isEmpty()) {
-            replaceMainFragment(new ErrorDialogFragment(data));
-        }
-    }
-
-    private void replaceMainFragment(Fragment fragment) {
-        //Object mainFragment = Helpers.getField(this,"mMainFragment");
-        Fragment mainFragment = getMainFragment();
-
-        if (mainFragment != null && fragment != null && mainFragment != fragment) {
-            Helpers.setField(this, "mMainFragment", fragment);
-
-            FragmentTransaction ft = getChildFragmentManager().beginTransaction();
-            ft.replace(R.id.scale_frame, fragment);
-            //mFocusOnContent = !isShowingHeaders(); // Fix focus lost when error fragment shown and sidebar is hidden
-            mFocusOnContent = hasFocus(); // Maintain focus
-            ft.runOnCommit(this::focusOnContentIfNeeded);
-            ft.commitAllowingStateLoss(); // FIX: "Can not perform this action after onSaveInstanceState"
-        }
-    }
-
-    @Override
-    public void addSection(int index, BrowseSection section) {
-        if (section == null) {
-            return;
-        }
-
-        if (mSections.get(section.getId()) != null && (index == -1 || indexOf(section.getId()) == index)) {
-            return;
-        }
-
-        removeSection(section);
-
-        mSections.put(section.getId(), section);
-        createHeader(index, section);
-    }
-
-    @Override
-    public void removeSection(BrowseSection section) {
-        if (section == null) {
-            return;
-        }
-
-        mSections.remove(section.getId());
-        removeHeader(section);
-    }
-
-    @Override
-    public void removeAllSections() {
-        mSections.clear();
-        mSectionRowAdapter.clear();
-    }
-
-    @Override
-    public void updateSection(VideoGroup group) {
-        restoreMainFragment();
-
-        mSectionFragmentFactory.updateCurrentFragment(group);
-
-        fixInvisibleSearchOrb();
-    }
-
-    @Override
-    public void updateSection(SettingsGroup group) {
-        restoreMainFragment();
-
-        mSectionFragmentFactory.updateCurrentFragment(group);
-    }
-
-    @Override
-    public void selectSection(int index, boolean focusOnContent) {
-        if (index >= 0 && mSectionRowAdapter.size() > 0) {
-            mFocusOnContent = focusOnContent; // focus after header transition
-
-            // Fix refresh current section
-            if (getSelectedPosition() == index) {
-                // update section manually
-                // headers transition event not fired on the same index
-                focusOnContentIfNeeded();
-                mBrowsePresenter.onSectionFocused(getSelectedHeaderId());
-            }
-
-            // Need select again if current header is removed previously (can't check for it right now)
-            // Fallback to the last section if index above size
-            setSelectedPosition(index < mSectionRowAdapter.size() ? index : mSectionRowAdapter.size() - 1, false);
-        }
-    }
-
-    @Override
-    public void focusOnContent() {
-        startHeadersTransitionSafe(false);
-        if (getMainFragment() != null && getMainFragment().getView() != null) {
-            getMainFragment().getView().requestFocus();
-        }
-    }
-
-    /**
-     * Usually called after header transition or fragment transaction
-     */
-    private void focusOnContentIfNeeded() {
-        if (mFocusOnContent) {
-            focusOnContent();
-            mFocusOnContent = false;
-        }
-    }
-
-    private boolean hasFocus() {
-        if (getMainFragment() == null || getMainFragment().getView() == null) {
             return false;
         }
 
-        return getMainFragment().getView().hasFocus();
-    }
+        public void setExpanded(boolean expanded) {
+            if (mIsExpanded == expanded) return;
+            mIsExpanded = expanded;
 
-    @Override
-    public void selectSectionItem(int index) {
-        if (index >= 0) {
-            mSectionFragmentFactory.setCurrentFragmentItemIndex(index);
-        }
-    }
+            int startWidth = mSidebarWrapper.getWidth();
+            int targetWidth = dpToPx(mContext, expanded ? EXPANDED_WIDTH_DP : COLLAPSED_WIDTH_DP);
 
-    @Override
-    public void selectSectionItem(Video item) {
-        if (item != null) {
-            mSectionFragmentFactory.selectCurrentFragmentItem(item);
-        }
-    }
+            if (mWidthAnimator != null && mWidthAnimator.isRunning()) {
+                mWidthAnimator.cancel();
+            }
 
-    /**
-     * Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
-     */
-    private void startHeadersTransitionSafe(boolean withHeaders) {
-        // Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
-        if (!Utils.checkActivity(getActivity())) {
-            return;
-        }
+            mWidthAnimator = ValueAnimator.ofInt(startWidth, targetWidth);
+            mWidthAnimator.setDuration(200);
+            mWidthAnimator.setInterpolator(new DecelerateInterpolator());
+            mWidthAnimator.addUpdateListener(animation -> {
+                int val = (int) animation.getAnimatedValue();
+                ViewGroup.LayoutParams params = mSidebarWrapper.getLayoutParams();
+                params.width = val;
+                mSidebarWrapper.setLayoutParams(params);
+            });
+            mWidthAnimator.start();
 
-        try {
-            startHeadersTransition(withHeaders);
-        } catch (IllegalStateException e) {
-            // NOP
-        }
-    }
-
-    /**
-     * Restore after the error fragment
-     */
-    private void restoreMainFragment() {
-        Fragment currentFragment = mSectionFragmentFactory.getCurrentFragment();
-
-        if (currentFragment != null) {
-            replaceMainFragment(currentFragment);
-        }
-    }
-
-    private void createHeader(int index, BrowseSection header) {
-        HeaderItem headerItem = new SectionHeaderItem(header);
-
-        PageRow pageRow = new PageRow(headerItem);
-        if (index == -1 || mSectionRowAdapter.size() < index) {
-            mSectionRowAdapter.add(pageRow); // add to the end
-        } else {
-            mSectionRowAdapter.add(index, pageRow);
+            for (ViewHolder holder : mHolders) {
+                if (expanded) {
+                    holder.titleView.setVisibility(View.VISIBLE);
+                    holder.titleView.animate().alpha(1f).setDuration(180).start();
+                } else {
+                    holder.titleView.animate().alpha(0f).setDuration(100).withEndAction(() -> {
+                        if (!mIsExpanded) {
+                            holder.titleView.setVisibility(View.GONE);
+                        }
+                    }).start();
+                }
+            }
+            updateVisualSelection();
         }
 
-        refreshHeaderDividers();
-    }
+        private void applyCollapsedStateImmediate() {
+            mIsExpanded = false;
+            for (ViewHolder holder : mHolders) {
+                holder.titleView.setAlpha(0f);
+                holder.titleView.setVisibility(View.GONE);
+            }
+            updateVisualSelection();
+        }
 
-    private void removeHeader(BrowseSection header) {
-        Object foundHeader = null;
+        private void updateVisualSelection() {
+            for (int i = 0; i < mHolders.size(); i++) {
+                ViewHolder holder = mHolders.get(i);
+                boolean isFocused = holder.rowView.hasFocus();
+                boolean isSelected = (i == mSelectedIndex);
 
-        for (Object item : mSectionRowAdapter.unmodifiableList()) {
-            if (((PageRow) item).getHeaderItem().getId() == header.getId()) {
-                foundHeader = item;
-                break;
+                GradientDrawable bg = new GradientDrawable();
+                bg.setCornerRadius(dpToPx(mContext, 24));
+
+                if (isFocused) {
+                    // ভিডিওর মতো সাদা হাইলাইট পিল যখন অপশনের ওপর যাওয়া হবে
+                    bg.setColor(Color.WHITE);
+                    holder.rowView.setBackground(bg);
+                    holder.iconView.setColorFilter(Color.BLACK);
+                    holder.titleView.setTextColor(Color.BLACK);
+                    holder.titleView.setTypeface(null, Typeface.BOLD);
+                } else if (isSelected) {
+                    // যখন ডানপাশে ভিডিও দেখা হচ্ছে, তখন সিলেক্টেড আইকনের নিচে হালকা হাইলাইট থাকবে
+                    bg.setColor(Color.parseColor("#28FFFFFF"));
+                    holder.rowView.setBackground(bg);
+                    holder.iconView.setColorFilter(Color.WHITE);
+                    holder.titleView.setTextColor(Color.WHITE);
+                    holder.titleView.setTypeface(null, Typeface.BOLD);
+                } else {
+                    bg.setColor(Color.TRANSPARENT);
+                    holder.rowView.setBackground(bg);
+                    holder.iconView.setColorFilter(Color.parseColor("#AAAAAA"));
+                    holder.titleView.setTextColor(Color.parseColor("#AAAAAA"));
+                    holder.titleView.setTypeface(null, Typeface.NORMAL);
+                }
             }
         }
-
-        if (foundHeader != null) {
-            mSectionRowAdapter.remove(foundHeader);
-            refreshHeaderDividers();
-        }
     }
-
-    @Override
-    public void clearSection(BrowseSection section) {
-        mSectionFragmentFactory.clearCurrentFragment();
-    }
-
-    @Override
-    public void onDestroyView() {
-        mSectionFragmentFactory.cleanup();
-
-        super.onDestroyView();
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        mBrowsePresenter.onViewDestroyed();
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-
-        if (!mIsFragmentCreated) {
-            mBrowsePresenter.onViewPaused();
-        }
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-
-        if (!mIsFragmentCreated) {
-            mBrowsePresenter.onViewResumed();
-        }
-
-        mIsFragmentCreated = false;
-    }
-
-    /**
-     * Fix suddenly invisible search orb<br/>
-     * Could happen on topmost category when the page partially scrolled<br/>
-     * More info: {@link TitleHelper}
-     */
-    private void fixInvisibleSearchOrb() {
-        if (isShowingTitle() && getTitleView() != null && getTitleView().getVisibility() != View.VISIBLE) {
-            getTitleView().setVisibility(View.VISIBLE);
-        }
-    }
-
-    @Override
-    public void showProgressBar(boolean show) {
-        Runnable callback;
-
-        if (show) {
-            callback = mProgressBarManager::show;
-        } else {
-            callback = mProgressBarManager::hide;
-        }
-
-        // Essential. Need to run on the main thread.
-        new Handler(Looper.getMainLooper()).post(callback);
-    }
-
-    @Override
-    public boolean isProgressBarShowing() {
-        return mProgressBarManager.isShowing();
-    }
-
-    @Override
-    public boolean isEmpty() {
-        return mSectionFragmentFactory == null || mSectionFragmentFactory.isEmpty();
-    }
-
-    @Override
-    public void updateBadge() {
-        if (getContext() == null) {
-            return;
-        }
-
-        SplashPresenter splashPresenter = SplashPresenter.instance(getContext());
-
-        if (splashPresenter == null) {
-            return;
-        }
-
-        int appLogoRes = Helpers.getThemeAttr(getContext(), R.attr.appLogo);
-
-        Drawable bridgeIcon = Utils.getDrawable(getContext(), splashPresenter.getBridgePackageName(), "app_icon");
-
-        // Top right corner logo
-        setBadgeDrawable(bridgeIcon != null ? bridgeIcon : appLogoRes > 0 ? ContextCompat.getDrawable(getContext(), appLogoRes) : null);
-    }
-    }
+}
