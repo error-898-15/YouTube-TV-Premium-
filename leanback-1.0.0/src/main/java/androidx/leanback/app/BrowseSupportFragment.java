@@ -1464,6 +1464,15 @@ public class BrowseSupportFragment extends BaseSupportFragment {
         if (fadeEdge != null) {
             fadeEdge.setVisibility(onScreen ? View.VISIBLE : View.INVISIBLE);
         }
+
+        // MOD: permanent rail. Keep the content to the right of the rail in EVERY code path
+        // (entrance transition, restore, return from player...), not only inside expandMainFragment().
+        // Otherwise the content is drawn from x=0 and the rail looks like it disappeared.
+        if (mScaleFrameLayout != null) {
+            MarginLayoutParams contentLp = (MarginLayoutParams) mScaleFrameLayout.getLayoutParams();
+            contentLp.setMarginStart(onScreen ? mContainerListMarginStart : mCollapsedHeadersWidth);
+            mScaleFrameLayout.setLayoutParams(contentLp);
+        }
     }
 
     void showHeaders(boolean show) {
@@ -1696,6 +1705,16 @@ public class BrowseSupportFragment extends BaseSupportFragment {
         // if main fragment wasn't commited in stopped state, do it again in onStart()
         commitMainFragment();
         mSetSelectionRunnable.start();
+    }
+
+    // MOD: permanent rail. Re-assert rail layout after returning from player / other screens.
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mCanShowHeaders && !isInHeadersTransition() && mHeadersSupportFragment != null
+                && mHeadersSupportFragment.getView() != null) {
+            setHeadersOnScreen(mShowingHeaders);
+        }
     }
 
     @Override
