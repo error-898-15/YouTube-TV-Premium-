@@ -371,7 +371,13 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         invokeFactoryUpdateSettingsGroup(group);
     }
 
+    // BrowseView#showError. Was missing => "BrowseFragment is not abstract and does not override showError(ErrorFragmentData)"
     @Override
+    public void showError(ErrorFragmentData data) {
+        replaceMainFragment(new ErrorDialogFragment(data));
+    }
+
+    // NOTE: not declared in BrowseView, so it is a plain method (no override annotation)
     public void updateErrorIfEmpty(ErrorFragmentData data) {
         if (isEmpty()) {
             replaceMainFragment(new ErrorDialogFragment(data));
