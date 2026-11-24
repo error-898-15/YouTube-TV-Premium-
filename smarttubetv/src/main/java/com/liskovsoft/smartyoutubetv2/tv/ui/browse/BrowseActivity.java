@@ -27,5 +27,6 @@ public class BrowseActivity extends LeanbackActivity {
         if (browseThemeResId > 0) {
             setTheme(browseThemeResId);
         }
+        getTheme().applyStyle(R.style.BrowseCompactOverlay, true);
     }
 }
