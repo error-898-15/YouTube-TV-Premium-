@@ -1964,4 +1964,4 @@ public class BrowseSupportFragment extends BaseSupportFragment {
             return false;
         }
     }
-    }
+            }
