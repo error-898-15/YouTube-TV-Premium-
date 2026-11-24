@@ -516,7 +516,7 @@ public class TikTokFragment extends Fragment {
         if (mWebView == null) return;
         String js = "(function(){"
                 + "var vh = window.innerHeight || 720;"
-                + "var btns = Array.from(document.querySelectorAll('[data-e2e="comment-icon"], [data-e2e="browse-comment-icon"], button[aria-label*="comment" i], button[aria-label*="Comment" i]'));"
+                + "var btns = Array.from(document.querySelectorAll('[data-e2e=\"comment-icon\"], [data-e2e=\"browse-comment-icon\"], button[aria-label*=\"comment\" i], button[aria-label*=\"Comment\" i]'));"
                 + "var best = null, bestDist = 1e9;"
                 + "btns.forEach(function(b){"
                 + "  var r = b.getBoundingClientRect();"
@@ -526,7 +526,7 @@ public class TikTokFragment extends Fragment {
                 + "  }"
                 + "});"
                 + "if(best){ best.click(); return; }"
-                + "var el = document.querySelector('[data-e2e="comment-level-1"], [class*="DivCommentListContainer"]');"
+                + "var el = document.querySelector('[data-e2e=\"comment-level-1\"], [class*=\"DivCommentListContainer\"]');"
                 + "if(el){ el.scrollIntoView({behavior:'smooth', block:'start'}); }"
                 + "})();";
         mWebView.evaluateJavascript(js, null);
@@ -536,7 +536,7 @@ public class TikTokFragment extends Fragment {
         if (mWebView == null) return;
         String js = "(function(){"
                 + "var vh = window.innerHeight || 720;"
-                + "var links = Array.from(document.querySelectorAll('[data-e2e="video-author-avatar"], [data-e2e="video-author-uniqueid"], a[href^="/@"]'));"
+                + "var links = Array.from(document.querySelectorAll('[data-e2e=\"video-author-avatar\"], [data-e2e=\"video-author-uniqueid\"], a[href^=\"/@\"]'));"
                 + "var best = null, bestDist = 1e9;"
                 + "links.forEach(function(a){"
                 + "  var r = a.getBoundingClientRect();"
@@ -564,7 +564,7 @@ public class TikTokFragment extends Fragment {
                 + "if(document.getElementById('st_tiktok_tv_css')) return;"
                 + "var s = document.createElement('style');"
                 + "s.id = 'st_tiktok_tv_css';"
-                + "s.textContent = '[data-e2e="bottom-banner"], [class*="DivBottomBanner"], [class*="DivGetAppButton"]{display:none !important;} body{background:#0f0f0f !important;}';"
+                + "s.textContent = '[data-e2e=\"bottom-banner\"], [class*=\"DivBottomBanner\"], [class*=\"DivGetAppButton\"]{display:none !important;} body{background:#0f0f0f !important;}';"
                 + "document.head && document.head.appendChild(s);"
                 + "})();";
         mWebView.evaluateJavascript(js, null);
@@ -597,4 +597,4 @@ public class TikTokFragment extends Fragment {
         }
         super.onDestroyView();
     }
-  }
+            }
