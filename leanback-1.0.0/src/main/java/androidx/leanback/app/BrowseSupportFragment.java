@@ -1452,6 +1452,17 @@ public class BrowseSupportFragment extends BaseSupportFragment {
         }
     }
 
+    private boolean isParentManagingMargin() {
+        if (mScaleFrameLayout != null && mScaleFrameLayout.getParent() instanceof View) {
+            ViewGroup.LayoutParams parentLp = ((View) mScaleFrameLayout.getParent()).getLayoutParams();
+            if (parentLp instanceof MarginLayoutParams) {
+                MarginLayoutParams mlp = (MarginLayoutParams) parentLp;
+                return mlp.getMarginStart() > 0 || mlp.leftMargin > 0;
+            }
+        }
+        return false;
+    }
+
     private void setHeadersOnScreen(boolean onScreen) {
         MarginLayoutParams lp;
         View containerList;
@@ -1473,7 +1484,8 @@ public class BrowseSupportFragment extends BaseSupportFragment {
         // Otherwise the content is drawn from x=0 and the rail looks like it disappeared.
         if (mScaleFrameLayout != null) {
             MarginLayoutParams contentLp = (MarginLayoutParams) mScaleFrameLayout.getLayoutParams();
-            contentLp.setMarginStart(onScreen ? mContainerListMarginStart : mCollapsedHeadersWidth);
+            int targetMargin = isParentManagingMargin() ? 0 : (onScreen ? mContainerListMarginStart : mCollapsedHeadersWidth);
+            contentLp.setMarginStart(targetMargin);
             mScaleFrameLayout.setLayoutParams(contentLp);
         }
 
@@ -1510,8 +1522,9 @@ public class BrowseSupportFragment extends BaseSupportFragment {
 
     private void expandMainFragment(boolean expand) {
         MarginLayoutParams params = (MarginLayoutParams) mScaleFrameLayout.getLayoutParams();
-        // MOD: mini rail. Content starts right after the icon rail when sidebar is collapsed.
-        params.setMarginStart(!expand ? mContainerListMarginStart : mCollapsedHeadersWidth);
+        // MOD: mini rail. Avoid double margin when browse_container_dock already offsets for the sidebar rail.
+        int targetMargin = isParentManagingMargin() ? 0 : (!expand ? mContainerListMarginStart : mCollapsedHeadersWidth);
+        params.setMarginStart(targetMargin);
         mScaleFrameLayout.setLayoutParams(params);
         mMainFragmentAdapter.setExpand(expand);
 
