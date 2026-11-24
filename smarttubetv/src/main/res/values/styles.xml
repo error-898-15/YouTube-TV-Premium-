@@ -24,6 +24,12 @@
         <item name="android:verticalSpacing">@dimen/browse_headers_vertical_spacing</item>
     </style>
 
+    <!-- Applied on BrowseActivity so posters and row headers sit cleanly next to the icon rail -->
+    <style name="BrowseCompactOverlay">
+        <item name="browsePaddingStart">@dimen/browse_content_padding_start</item>
+        <item name="browsePaddingEnd">@dimen/browse_content_padding_end</item>
+    </style>
+
     <!-- Color scheme: Teal (Default) -->
     <style name="App.Theme.Leanback.Player" parent="Theme.Leanback">
         <!-- <item name="android:windowBackground">@null</item> -->
