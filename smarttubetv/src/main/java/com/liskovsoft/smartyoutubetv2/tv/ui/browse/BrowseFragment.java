@@ -33,11 +33,14 @@ import androidx.leanback.app.BrowseSupportFragment;
 import androidx.leanback.widget.ArrayObjectAdapter;
 import androidx.leanback.widget.BrowseFrameLayout;
 import androidx.leanback.widget.HeaderItem;
+import androidx.leanback.widget.HorizontalGridView;
 import androidx.leanback.widget.ListRowPresenter;
 import androidx.leanback.widget.PageRow;
 import androidx.leanback.widget.Presenter;
 import androidx.leanback.widget.PresenterSelector;
 
+import com.bumptech.glide.Glide;
+import com.liskovsoft.mediaserviceinterfaces.oauth.Account;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.BrowseSection;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.SettingsGroup;
@@ -50,10 +53,12 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.SearchPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AccountSelectionPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.BrowseView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
+import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.IconHeaderItemPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.ui.browse.dialog.ErrorDialogFragment;
 import com.liskovsoft.smartyoutubetv2.tv.ui.widgets.browse.NavigateTitleView;
+import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -63,7 +68,8 @@ import java.util.Map;
 
 /**
  * Complete SmartTube BrowseFragment with Permanent Expandable Icon Sidebar
- * (72dp collapsed icon rail -> 240dp expanded drawer) and full video loading support.
+ * (64dp transparent collapsed icon rail -> 240dp expanded overlay drawer)
+ * and clean gap-free alignment with video posters.
  */
 public class BrowseFragment extends BrowseSupportFragment implements BrowseView {
     private static final String TAG = BrowseFragment.class.getSimpleName();
@@ -88,6 +94,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     private PermanentSidebarController mSidebarController;
     private View mBrowseContainerDock;
+    private View mScaleFrameLayout;
 
     private Method mUpdateVideoGroupMethod;
     private Method mUpdateSettingsGroupMethod;
@@ -136,6 +143,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         mTitleView = root.findViewById(R.id.browse_title_group);
         mBrowseContainerDock = root.findViewById(R.id.browse_container_dock);
+        mScaleFrameLayout = root.findViewById(R.id.scale_frame);
         View headersDock = root.findViewById(R.id.browse_headers_dock);
 
         // Hide default Leanback header dock offscreen while keeping PageRow fragment creation active
@@ -148,13 +156,30 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             }
         }
 
-        // Keep 72dp left margin on video container so permanent icon rail never overlaps video cards
+        if (mBrowseContainerDock instanceof ViewGroup) {
+            ((ViewGroup) mBrowseContainerDock).setClipChildren(false);
+            ((ViewGroup) mBrowseContainerDock).setClipToPadding(false);
+        }
+        if (mScaleFrameLayout instanceof ViewGroup) {
+            ((ViewGroup) mScaleFrameLayout).setClipChildren(false);
+            ((ViewGroup) mScaleFrameLayout).setClipToPadding(false);
+        }
+
+        // Offset content & title bar cleanly right after the 64dp icon rail without double scale_frame margins
+        final int collapsedPx = dpToPx(requireContext(), PermanentSidebarController.COLLAPSED_WIDTH_DP);
+        enforceContainerMargin(collapsedPx);
+
         if (mBrowseContainerDock != null) {
-            final int collapsedPx = dpToPx(requireContext(), PermanentSidebarController.COLLAPSED_WIDTH_DP);
-            enforceContainerMargin(collapsedPx);
-            mBrowseContainerDock.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-                enforceContainerMargin(collapsedPx);
-            });
+            mBrowseContainerDock.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
+                    enforceContainerMargin(collapsedPx));
+        }
+        if (mScaleFrameLayout != null) {
+            mScaleFrameLayout.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
+                    enforceContainerMargin(collapsedPx));
+        }
+        if (mTitleView != null) {
+            mTitleView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
+                    enforceContainerMargin(collapsedPx));
         }
 
         // Attach Permanent Sidebar Controller
@@ -168,15 +193,27 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     }
 
     private void enforceContainerMargin(int leftMarginPx) {
-        if (mBrowseContainerDock == null) return;
-        mBrowseContainerDock.setTranslationX(0f);
-        ViewGroup.LayoutParams lp = mBrowseContainerDock.getLayoutParams();
+        if (mBrowseContainerDock != null) {
+            mBrowseContainerDock.setTranslationX(0f);
+            applyStartMargin(mBrowseContainerDock, leftMarginPx);
+        }
+        if (mScaleFrameLayout != null) {
+            mScaleFrameLayout.setTranslationX(0f);
+            applyStartMargin(mScaleFrameLayout, 0);
+        }
+        if (mTitleView != null) {
+            applyStartMargin(mTitleView, leftMarginPx);
+        }
+    }
+
+    private static void applyStartMargin(View view, int marginPx) {
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
         if (lp instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-            if (mlp.leftMargin != leftMarginPx || mlp.getMarginStart() != leftMarginPx) {
-                mlp.leftMargin = leftMarginPx;
-                mlp.setMarginStart(leftMarginPx);
-                mBrowseContainerDock.setLayoutParams(mlp);
+            if (mlp.leftMargin != marginPx || mlp.getMarginStart() != marginPx) {
+                mlp.leftMargin = marginPx;
+                mlp.setMarginStart(marginPx);
+                view.setLayoutParams(mlp);
             }
         }
     }
@@ -290,8 +327,33 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                             }
                         }
                         return null;
-                    } else if (direction == View.FOCUS_LEFT && mBrowseContainerDock instanceof ViewGroup) {
-                        // First check if there is another video card to the left inside the video grid
+                    }
+
+                    if (mTitleView != null && isDescendant(mTitleView, focused)) {
+                        if (direction == View.FOCUS_LEFT) {
+                            View nextInTitle = FocusFinder.getInstance().findNextFocus(
+                                    mTitleView, focused, View.FOCUS_LEFT
+                            );
+                            if (nextInTitle != null) {
+                                return nextInTitle;
+                            }
+                            mSidebarController.setExpanded(true);
+                            return mSidebarController.getSelectedFocusTarget();
+                        } else if (direction == View.FOCUS_DOWN) {
+                            View mainView = getMainFragment() != null ? getMainFragment().getView() : null;
+                            if (mainView != null) {
+                                return mainView;
+                            }
+                        }
+                        return null;
+                    }
+
+                    if (direction == View.FOCUS_LEFT && mBrowseContainerDock instanceof ViewGroup) {
+                        HorizontalGridView hgv = findAncestorHorizontalGridView(focused);
+                        if (hgv != null && hgv.getSelectedPosition() > 0) {
+                            return null;
+                        }
+                        // Check if there is another video card to the left inside the grid/row
                         View nextInContent = FocusFinder.getInstance().findNextFocus(
                                 (ViewGroup) mBrowseContainerDock, focused, View.FOCUS_LEFT
                         );
@@ -306,6 +368,27 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 });
             }
         }
+    }
+
+    private static boolean isDescendant(ViewGroup parent, View child) {
+        if (parent == null || child == null) return false;
+        View cur = child;
+        while (cur != null) {
+            if (cur == parent) return true;
+            cur = cur.getParent() instanceof View ? (View) cur.getParent() : null;
+        }
+        return false;
+    }
+
+    private static HorizontalGridView findAncestorHorizontalGridView(View view) {
+        View cur = view;
+        while (cur != null) {
+            if (cur instanceof HorizontalGridView) {
+                return (HorizontalGridView) cur;
+            }
+            cur = cur.getParent() instanceof View ? (View) cur.getParent() : null;
+        }
+        return null;
     }
 
     private void updateWaitTime() {
@@ -387,6 +470,9 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     @Override
     public void updateBadge() {
         updateTitleViewSafely();
+        if (mSidebarController != null && mSections != null) {
+            mSidebarController.syncSections(mSections);
+        }
     }
 
     private void invokeFactoryUpdateVideoGroup(VideoGroup group) {
@@ -653,6 +739,13 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
         mIsFragmentCreated = false;
 
+        if (getContext() != null) {
+            enforceContainerMargin(dpToPx(getContext(), PermanentSidebarController.COLLAPSED_WIDTH_DP));
+        }
+        if (mSidebarController != null && mSections != null && !mSections.isEmpty()) {
+            mSidebarController.syncSections(mSections);
+        }
+
         updateTitleViewSafely();
     }
 
@@ -666,11 +759,12 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     // =========================================================================
 
     private static class PermanentSidebarController {
-        static final int COLLAPSED_WIDTH_DP = 72;
+        static final int COLLAPSED_WIDTH_DP = 64;
         static final int EXPANDED_WIDTH_DP = 240;
 
         private static final int ACTION_PROFILE = -100;
         private static final int ACTION_SEARCH = -101;
+        private static final int EXPANDED_BG_COLOR = Color.parseColor("#EB141414");
 
         private final Context mContext;
         private final BrowseFragment mFragment;
@@ -690,14 +784,18 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             final int sectionId;
             final String title;
             final int iconResId;
+            final String iconUrl;
             final boolean isHeader;
+            final boolean isAvatar;
 
-            SidebarEntry(int sectionIndex, int sectionId, String title, int iconResId, boolean isHeader) {
+            SidebarEntry(int sectionIndex, int sectionId, String title, int iconResId, String iconUrl, boolean isHeader, boolean isAvatar) {
                 this.sectionIndex = sectionIndex;
                 this.sectionId = sectionId;
                 this.title = title;
                 this.iconResId = iconResId;
+                this.iconUrl = iconUrl;
                 this.isHeader = isHeader;
+                this.isAvatar = isAvatar;
             }
         }
 
@@ -726,18 +824,20 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     Gravity.START
             );
             mSidebarWrapper.setLayoutParams(wrapperParams);
-            mSidebarWrapper.setBackgroundColor(Color.parseColor("#F20F0F0F"));
-            mSidebarWrapper.setElevation(dpToPx(context, 16));
+            mSidebarWrapper.setBackgroundColor(Color.TRANSPARENT);
+            mSidebarWrapper.setElevation(0f);
 
             ScrollView scrollView = new ScrollView(context);
             scrollView.setVerticalScrollBarEnabled(false);
             scrollView.setFillViewport(true);
+            scrollView.setClipToPadding(false);
 
             mItemsContainer = new LinearLayout(context);
             mItemsContainer.setOrientation(LinearLayout.VERTICAL);
-            mItemsContainer.setGravity(Gravity.CENTER_VERTICAL);
-            int vPad = dpToPx(context, 16);
-            mItemsContainer.setPadding(dpToPx(context, 10), vPad, dpToPx(context, 10), vPad);
+            mItemsContainer.setGravity(Gravity.TOP);
+            int hPad = dpToPx(context, 10);
+            int vPad = dpToPx(context, 22);
+            mItemsContainer.setPadding(hPad, vPad, hPad, vPad);
 
             scrollView.addView(mItemsContainer);
             mSidebarWrapper.addView(scrollView);
@@ -790,20 +890,36 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             mItemsContainer.removeAllViews();
             mHolders.clear();
 
-            int accountIconId = mContext.getResources().getIdentifier("header_account", "drawable", mContext.getPackageName());
-            if (accountIconId == 0) accountIconId = android.R.drawable.sym_def_app_icon;
+            Account account = MediaServiceManager.instance().getSelectedAccount();
+            String profileTitle = "Profile";
+            String profileAvatarUrl = null;
+            if (account != null) {
+                if (!TextUtils.isEmpty(account.getName())) {
+                    profileTitle = account.getName();
+                } else if (!TextUtils.isEmpty(account.getEmail())) {
+                    profileTitle = account.getEmail();
+                }
+                profileAvatarUrl = account.getAvatarImageUrl();
+            }
 
-            int searchIconId = mContext.getResources().getIdentifier("action_search", "drawable", mContext.getPackageName());
-            if (searchIconId == 0) searchIconId = android.R.drawable.ic_menu_search;
+            int accountIconId = R.drawable.browse_title_account;
+            int searchIconId = R.drawable.action_search;
 
             List<SidebarEntry> entries = new ArrayList<>();
-            entries.add(new SidebarEntry(-1, ACTION_PROFILE, "Profile", accountIconId, true));
-            entries.add(new SidebarEntry(-1, ACTION_SEARCH, "Search", searchIconId, false));
+            entries.add(new SidebarEntry(
+                    -1, ACTION_PROFILE, profileTitle, accountIconId, profileAvatarUrl,
+                    true, !TextUtils.isEmpty(profileAvatarUrl)
+            ));
+            entries.add(new SidebarEntry(-1, ACTION_SEARCH, "Search", searchIconId, null, false, false));
 
             int secIdx = 0;
             for (BrowseSection section : sectionsMap.values()) {
                 int iconRes = section.getResId() > 0 ? section.getResId() : android.R.drawable.ic_media_play;
-                entries.add(new SidebarEntry(secIdx, section.getId(), section.getTitle(), iconRes, false));
+                String iconUrl = section.getIconUrl();
+                entries.add(new SidebarEntry(
+                        secIdx, section.getId(), section.getTitle(), iconRes, iconUrl,
+                        false, !TextUtils.isEmpty(iconUrl)
+                ));
                 secIdx++;
             }
 
@@ -844,33 +960,41 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    dpToPx(mContext, entry.isHeader ? 50 : 44)
+                    dpToPx(mContext, entry.isHeader ? 46 : 44)
             );
             rowParams.topMargin = dpToPx(mContext, entry.isHeader ? 0 : 3);
-            rowParams.bottomMargin = dpToPx(mContext, entry.isHeader ? 10 : 2);
+            rowParams.bottomMargin = dpToPx(mContext, entry.isHeader ? 14 : 2);
             row.setLayoutParams(rowParams);
-            row.setPadding(dpToPx(mContext, 12), 0, dpToPx(mContext, 14), 0);
+            row.setPadding(dpToPx(mContext, entry.isHeader ? 9 : 10), 0, dpToPx(mContext, 14), 0);
 
             ImageView icon = new ImageView(mContext);
             int iconSize = dpToPx(mContext, entry.isHeader ? 26 : 24);
             icon.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
 
-            Drawable drawable = null;
+            Drawable fallbackDrawable = null;
             try {
-                drawable = ContextCompat.getDrawable(mContext, entry.iconResId);
+                fallbackDrawable = ContextCompat.getDrawable(mContext, entry.iconResId);
             } catch (Exception ignored) {
             }
-            if (drawable == null) {
-                drawable = ContextCompat.getDrawable(mContext, android.R.drawable.sym_def_app_icon);
+            if (fallbackDrawable == null) {
+                fallbackDrawable = ContextCompat.getDrawable(mContext, android.R.drawable.sym_def_app_icon);
             }
-            icon.setImageDrawable(drawable != null ? drawable.mutate() : null);
+
+            if (!TextUtils.isEmpty(entry.iconUrl)) {
+                Glide.with(mContext)
+                        .load(entry.iconUrl)
+                        .apply(ViewUtil.glideOptions().circleCrop().error(fallbackDrawable))
+                        .into(icon);
+            } else {
+                icon.setImageDrawable(fallbackDrawable != null ? fallbackDrawable.mutate() : null);
+            }
 
             TextView title = new TextView(mContext);
             LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
             );
-            titleParams.leftMargin = dpToPx(mContext, 18);
+            titleParams.leftMargin = dpToPx(mContext, 16);
             title.setLayoutParams(titleParams);
             title.setText(entry.title);
             title.setTextSize(TypedValue.COMPLEX_UNIT_SP, entry.isHeader ? 16 : 15);
@@ -963,6 +1087,11 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             if (mIsExpanded == expanded) return;
             mIsExpanded = expanded;
 
+            if (expanded) {
+                mSidebarWrapper.setBackgroundColor(EXPANDED_BG_COLOR);
+                mSidebarWrapper.setElevation(dpToPx(mContext, 16));
+            }
+
             int startWidth = mSidebarWrapper.getWidth() > 0
                     ? mSidebarWrapper.getWidth()
                     : dpToPx(mContext, expanded ? COLLAPSED_WIDTH_DP : EXPANDED_WIDTH_DP);
@@ -979,6 +1108,10 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 ViewGroup.LayoutParams lp = mSidebarWrapper.getLayoutParams();
                 lp.width = (int) anim.getAnimatedValue();
                 mSidebarWrapper.setLayoutParams(lp);
+                if (!expanded && (int) anim.getAnimatedValue() <= targetWidth) {
+                    mSidebarWrapper.setBackgroundColor(Color.TRANSPARENT);
+                    mSidebarWrapper.setElevation(0f);
+                }
             });
             mWidthAnimator.start();
 
@@ -994,6 +1127,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     }).start();
                 }
             }
+
             updateVisualSelection();
         }
 
@@ -1004,28 +1138,40 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 boolean isSelected = (i == mSelectedRowIndex);
 
                 GradientDrawable bg = new GradientDrawable();
-                bg.setCornerRadius(dpToPx(mContext, 24));
+                bg.setCornerRadius(dpToPx(mContext, 22));
 
                 if (isFocused) {
                     bg.setColor(Color.WHITE);
                     holder.rowView.setBackground(bg);
-                    holder.iconView.setColorFilter(Color.BLACK);
-                    holder.titleView.setTextColor(Color.BLACK);
+                    if (holder.entry.isAvatar) {
+                        holder.iconView.clearColorFilter();
+                    } else {
+                        holder.iconView.setColorFilter(Color.parseColor("#0F0F0F"));
+                    }
+                    holder.titleView.setTextColor(Color.parseColor("#0F0F0F"));
                     holder.titleView.setTypeface(null, Typeface.BOLD);
                 } else if (isSelected) {
-                    bg.setColor(Color.parseColor("#2AFFFFFF"));
+                    bg.setColor(Color.parseColor(mIsExpanded ? "#26FFFFFF" : "#2EFFFFFF"));
                     holder.rowView.setBackground(bg);
-                    holder.iconView.setColorFilter(Color.WHITE);
+                    if (holder.entry.isAvatar) {
+                        holder.iconView.clearColorFilter();
+                    } else {
+                        holder.iconView.setColorFilter(Color.WHITE);
+                    }
                     holder.titleView.setTextColor(Color.WHITE);
                     holder.titleView.setTypeface(null, Typeface.BOLD);
                 } else {
                     bg.setColor(Color.TRANSPARENT);
                     holder.rowView.setBackground(bg);
-                    holder.iconView.setColorFilter(Color.parseColor("#AAAAAA"));
-                    holder.titleView.setTextColor(Color.parseColor("#AAAAAA"));
+                    if (holder.entry.isAvatar) {
+                        holder.iconView.clearColorFilter();
+                    } else {
+                        holder.iconView.setColorFilter(Color.parseColor(mIsExpanded ? "#AAAAAA" : "#99FFFFFF"));
+                    }
+                    holder.titleView.setTextColor(Color.parseColor("#CCCCCC"));
                     holder.titleView.setTypeface(null, Typeface.NORMAL);
                 }
             }
         }
     }
-}
+    }
