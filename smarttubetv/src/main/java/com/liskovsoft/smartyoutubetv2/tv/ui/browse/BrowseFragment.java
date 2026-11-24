@@ -57,6 +57,7 @@ import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.IconHeaderItemPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.ui.browse.dialog.ErrorDialogFragment;
+import com.liskovsoft.smartyoutubetv2.tv.ui.browse.tiktok.TikTokFragment;
 import com.liskovsoft.smartyoutubetv2.tv.ui.widgets.browse.NavigateTitleView;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
@@ -95,6 +96,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     private PermanentSidebarController mSidebarController;
     private View mBrowseContainerDock;
     private View mScaleFrameLayout;
+    private TikTokFragment mTikTokFragment;
+    private boolean mIsTikTokVisible;
 
     private Method mUpdateVideoGroupMethod;
     private Method mUpdateSettingsGroupMethod;
@@ -315,12 +318,28 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         if (getView() != null) {
             BrowseFrameLayout browseFrame = getView().findViewById(R.id.browse_frame);
             if (browseFrame != null) {
+                browseFrame.setOnDispatchKeyListener((v, keyCode, event) -> {
+                    if (mIsTikTokVisible && keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_DOWN) {
+                        if (mSidebarController != null && !mSidebarController.isAnySidebarItemFocused()) {
+                            if (mTikTokFragment != null && mTikTokFragment.handleBackPress()) {
+                                return true;
+                            }
+                            mSidebarController.focusSelectedRow();
+                            return true;
+                        }
+                    }
+                    return false;
+                });
                 browseFrame.setOnFocusSearchListener((focused, direction) -> {
                     if (mSidebarController == null) return null;
 
                     if (mSidebarController.isSidebarChild(focused)) {
                         if (direction == View.FOCUS_RIGHT) {
                             mSidebarController.setExpanded(false);
+                            if (mIsTikTokVisible && mTikTokFragment != null) {
+                                mTikTokFragment.focusDefaultControl();
+                                return mTikTokFragment.getView();
+                            }
                             View mainView = getMainFragment() != null ? getMainFragment().getView() : null;
                             if (mainView != null) {
                                 return mainView;
@@ -611,6 +630,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     @Override
     public void selectSection(int index, boolean focusOnContent) {
         if (index >= 0 && index < mSectionRowAdapter.size()) {
+            hideTikTokSection();
             mFocusOnContent = focusOnContent;
 
             if (mSidebarController != null) {
@@ -629,6 +649,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     public void selectSectionFromSidebar(int sectionIndex, int sectionId, boolean moveFocusToContent) {
         if (sectionIndex >= 0 && sectionIndex < mSectionRowAdapter.size()) {
+            hideTikTokSection();
             mFocusOnContent = moveFocusToContent;
             boolean alreadySelected = (getSelectedPosition() == sectionIndex) && (getMainFragment() != null);
             setSelectedPosition(sectionIndex, false);
@@ -638,6 +659,75 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     focusOnContent();
                 }
             }
+        }
+    }
+
+    public void openTikTokFromSidebar(boolean moveFocusToContent) {
+        if (!isAdded()) return;
+
+        mIsTikTokVisible = true;
+        if (mTitleView != null) {
+            mTitleView.setVisibility(View.GONE);
+        }
+
+        FragmentTransaction ft = getChildFragmentManager().beginTransaction();
+        Object mainFrag = Helpers.getField(this, "mMainFragment");
+        if (mainFrag instanceof Fragment && !((Fragment) mainFrag).isHidden()) {
+            ft.hide((Fragment) mainFrag);
+        }
+        if (mErrorFragment != null && !mErrorFragment.isHidden()) {
+            ft.hide(mErrorFragment);
+        }
+
+        if (mTikTokFragment == null) {
+            mTikTokFragment = new TikTokFragment();
+            ft.add(R.id.scale_frame, mTikTokFragment, "tiktok_fragment");
+        } else {
+            ft.show(mTikTokFragment);
+        }
+        ft.commitAllowingStateLoss();
+
+        mTikTokFragment.setOnExitToSidebarListener(() -> {
+            if (mSidebarController != null) {
+                mSidebarController.focusSelectedRow();
+            }
+        });
+        mTikTokFragment.setActive(true);
+
+        if (moveFocusToContent) {
+            if (mSidebarController != null) {
+                mSidebarController.setExpanded(false);
+            }
+            if (mHandler != null) {
+                mHandler.post(() -> {
+                    if (mTikTokFragment != null && mIsTikTokVisible) {
+                        mTikTokFragment.focusDefaultControl();
+                    }
+                });
+            }
+        }
+    }
+
+    private void hideTikTokSection() {
+        if (!mIsTikTokVisible) return;
+        mIsTikTokVisible = false;
+
+        if (mTitleView != null) {
+            mTitleView.setVisibility(View.VISIBLE);
+        }
+
+        if (mTikTokFragment != null) {
+            mTikTokFragment.setActive(false);
+            FragmentTransaction ft = getChildFragmentManager().beginTransaction();
+            ft.hide(mTikTokFragment);
+            Object mainFrag = Helpers.getField(this, "mMainFragment");
+            if (mainFrag instanceof Fragment && ((Fragment) mainFrag).isHidden() && mErrorFragment == null) {
+                ft.show((Fragment) mainFrag);
+            }
+            if (mErrorFragment != null && mErrorFragment.isHidden()) {
+                ft.show(mErrorFragment);
+            }
+            ft.commitAllowingStateLoss();
         }
     }
 
@@ -652,6 +742,10 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         startHeadersTransition(false);
         if (mSidebarController != null) {
             mSidebarController.setExpanded(false);
+        }
+        if (mIsTikTokVisible && mTikTokFragment != null) {
+            mTikTokFragment.focusDefaultControl();
+            return;
         }
         if (getMainFragment() != null && getMainFragment().getView() != null) {
             getMainFragment().getView().requestFocus();
@@ -720,6 +814,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     @Override
     public void onDestroyView() {
+        mTikTokFragment = null;
+        mIsTikTokVisible = false;
         super.onDestroyView();
         mFragmentFactory.cleanup();
     }
@@ -764,6 +860,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         private static final int ACTION_PROFILE = -100;
         private static final int ACTION_SEARCH = -101;
+        private static final int ACTION_TIKTOK = -102;
         private static final int EXPANDED_BG_COLOR = Color.parseColor("#EB141414");
 
         private final Context mContext;
@@ -887,6 +984,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         void syncSections(Map<Integer, BrowseSection> sectionsMap) {
             boolean hadFocus = isAnySidebarItemFocused();
+            boolean wasTikTokSelected = (mSelectedRowIndex >= 0 && mSelectedRowIndex < mHolders.size()
+                    && mHolders.get(mSelectedRowIndex).entry.sectionId == ACTION_TIKTOK);
             mItemsContainer.removeAllViews();
             mHolders.clear();
 
@@ -912,7 +1011,9 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             ));
             entries.add(new SidebarEntry(-1, ACTION_SEARCH, "Search", searchIconId, null, false, false));
 
+            boolean tikTokAdded = false;
             int secIdx = 0;
+            int totalSections = sectionsMap.size();
             for (BrowseSection section : sectionsMap.values()) {
                 int iconRes = section.getResId() > 0 ? section.getResId() : android.R.drawable.ic_media_play;
                 String iconUrl = section.getIconUrl();
@@ -920,7 +1021,16 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                         secIdx, section.getId(), section.getTitle(), iconRes, iconUrl,
                         false, !TextUtils.isEmpty(iconUrl)
                 ));
+                // Place TikTok right after Shorts (or right after the first section) for quick TV access
+                String titleLower = section.getTitle() != null ? section.getTitle().toLowerCase() : "";
+                if (!tikTokAdded && (titleLower.contains("shorts") || (totalSections > 1 && secIdx == 1) || totalSections == 1)) {
+                    entries.add(new SidebarEntry(-1, ACTION_TIKTOK, "TikTok", R.drawable.icon_tiktok, null, false, false));
+                    tikTokAdded = true;
+                }
                 secIdx++;
+            }
+            if (!tikTokAdded) {
+                entries.add(new SidebarEntry(-1, ACTION_TIKTOK, "TikTok", R.drawable.icon_tiktok, null, false, false));
             }
 
             for (int i = 0; i < entries.size(); i++) {
@@ -929,6 +1039,14 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                 mItemsContainer.addView(holder.rowView);
             }
 
+            if (wasTikTokSelected) {
+                for (int i = 0; i < mHolders.size(); i++) {
+                    if (mHolders.get(i).entry.sectionId == ACTION_TIKTOK) {
+                        mSelectedRowIndex = i;
+                        break;
+                    }
+                }
+            }
             if (mSelectedRowIndex >= mHolders.size()) {
                 mSelectedRowIndex = Math.min(2, mHolders.size() - 1);
             }
@@ -1010,7 +1128,14 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     if (!mIsExpanded) {
                         setExpanded(true);
                     }
-                    if (entry.sectionIndex >= 0) {
+                    if (entry.sectionId == ACTION_TIKTOK) {
+                        mSelectedRowIndex = rowIndex;
+                        if (mPendingSectionLoad != null) {
+                            mUiHandler.removeCallbacks(mPendingSectionLoad);
+                        }
+                        mPendingSectionLoad = () -> mFragment.openTikTokFromSidebar(false);
+                        mUiHandler.postDelayed(mPendingSectionLoad, 220);
+                    } else if (entry.sectionIndex >= 0) {
                         mSelectedRowIndex = rowIndex;
                         if (mPendingSectionLoad != null) {
                             mUiHandler.removeCallbacks(mPendingSectionLoad);
@@ -1038,6 +1163,13 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     } else if (entry.sectionId == ACTION_PROFILE) {
                         AccountSelectionPresenter.instance(mContext).show(true);
                         return true;
+                    } else if (entry.sectionId == ACTION_TIKTOK) {
+                        mSelectedRowIndex = rowIndex;
+                        if (mPendingSectionLoad != null) {
+                            mUiHandler.removeCallbacks(mPendingSectionLoad);
+                        }
+                        mFragment.openTikTokFromSidebar(true);
+                        return true;
                     } else if (entry.sectionIndex >= 0) {
                         if (mPendingSectionLoad != null) {
                             mUiHandler.removeCallbacks(mPendingSectionLoad);
@@ -1054,6 +1186,12 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     AccountSelectionPresenter.instance(mContext).show(true);
                 } else if (entry.sectionId == ACTION_SEARCH) {
                     SearchPresenter.instance(mContext).startSearch(null);
+                } else if (entry.sectionId == ACTION_TIKTOK) {
+                    mSelectedRowIndex = rowIndex;
+                    if (mPendingSectionLoad != null) {
+                        mUiHandler.removeCallbacks(mPendingSectionLoad);
+                    }
+                    mFragment.openTikTokFromSidebar(true);
                 } else if (entry.sectionIndex >= 0) {
                     mSelectedRowIndex = rowIndex;
                     if (mPendingSectionLoad != null) {
