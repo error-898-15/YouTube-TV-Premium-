@@ -29,4 +29,4 @@ public class BrowseActivity extends LeanbackActivity {
         }
         getTheme().applyStyle(R.style.BrowseCompactOverlay, true);
     }
-}
+            }
